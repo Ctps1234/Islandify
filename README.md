@@ -16,7 +16,16 @@ Telegram: https://t.me/Zyron_Official_26 | https://t.me/Zyron_Community_26
 <!-- SCREENSHOTS -->
 ## Screenshots
 
-_Screenshots coming soon. Add real screenshots to `docs/images/` (home.png, pill.png, banner.png, music.png, call.png, message_card.png, bubbles.png, customize.png, apps.png) and run `python update_release.py` again._
+<p align="center">
+  <img src="docs/images/Screenshot_20261011_111141.jpg" alt="Screenshot_20261011_111141" width="30%">
+  <img src="docs/images/Screenshot_20261011_111153.jpg" alt="Screenshot_20261011_111153" width="30%">
+  <img src="docs/images/Screenshot_20261011_111215.jpg" alt="Screenshot_20261011_111215" width="30%">
+  <img src="docs/images/Screenshot_20261011_111223.jpg" alt="Screenshot_20261011_111223" width="30%">
+  <img src="docs/images/Screenshot_20261011_111227.jpg" alt="Screenshot_20261011_111227" width="30%">
+  <img src="docs/images/Screenshot_20261011_111232.jpg" alt="Screenshot_20261011_111232" width="30%">
+  <img src="docs/images/Screenshot_20261011_111259.jpg" alt="Screenshot_20261011_111259" width="30%">
+  <img src="docs/images/Screenshot_20261011_111328.jpg" alt="Screenshot_20261011_111328" width="30%">
+</p>
 <!-- /SCREENSHOTS -->
 
 <!-- WHATSNEW -->
