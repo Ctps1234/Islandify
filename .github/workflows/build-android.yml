@@ -40,12 +40,9 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v6
 
-      # Signing secrets are deliberately unavailable to pull-request builds. If the four
-      # secrets are not configured, Gradle falls back to an installable debug-signed APK.
+      # Same-repository pull requests receive the signing secrets too, making every artifact
+      # updatable over the previous one. Fork PRs receive no secrets and safely use the fallback.
       - name: Configure release signing
-        if: >-
-          github.event_name != 'pull_request' &&
-          (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
         env:
           KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
           KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}

@@ -183,7 +183,7 @@ Pushing a tag whose name starts with `v` (for example, `v1.3`) also creates a Gi
 - `ANDROID_KEY_ALIAS`: the signing key alias.
 - `ANDROID_KEY_PASSWORD`: the signing key password.
 
-If those secrets are absent, the workflow still creates an installable debug-signed release APK. Signing secrets are never exposed to pull-request builds.
+For pull requests opened from this same repository, those secrets are used so each artifact can update the previous installation. GitHub does not expose them to pull requests from forks; fork builds safely fall back to a temporary debug signature.
 
 ## Project layout
 

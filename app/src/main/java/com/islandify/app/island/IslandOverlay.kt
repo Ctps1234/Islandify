@@ -76,37 +76,77 @@ class IslandOverlay(
     private var scope: CoroutineScope? = null
     private var view: ComposeView? = null
     private var params: WindowManager.LayoutParams? = null
+    private var fullscreenProbe: View? = null
     private var receiversOn = false
     private val otherAppFullscreen = MutableStateFlow(false)
 
     val shown: Boolean get() = view != null
 
     /**
-     * Window insets are dispatched when the foreground app changes system-bar visibility, so
-     * this stays event-driven and never inspects screen contents or polls the foreground app.
+     * The island window deliberately draws through the status-bar/cutout area. Its own insets can
+     * therefore report a zero top inset even while the bar is visible. A separate transparent,
+     * non-touchable 1 px window omits FLAG_LAYOUT_NO_LIMITS and receives the real bar visibility.
+     * Insets/layout callbacks are event-driven: no screen contents, app lists or polling are used.
      */
-    private fun observeFullscreen(root: View) {
-        root.setOnApplyWindowInsetsListener { view, insets ->
-            otherAppFullscreen.value = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                !insets.isVisible(WindowInsets.Type.statusBars())
-            } else {
-                @Suppress("DEPRECATION")
-                val insetHidden = insets.systemWindowInsetTop == 0
-                @Suppress("DEPRECATION")
-                val fullscreenFlag =
-                    view.systemUiVisibility and View.SYSTEM_UI_FLAG_FULLSCREEN != 0
-                insetHidden || fullscreenFlag
+    private fun startFullscreenProbe() {
+        if (fullscreenProbe != null) return
+        val probe = View(host).apply {
+            alpha = 0f
+            setOnApplyWindowInsetsListener { root, insets ->
+                val hidden = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                    !insets.isVisible(WindowInsets.Type.statusBars())
+                } else {
+                    @Suppress("DEPRECATION")
+                    val currentTop = insets.systemWindowInsetTop
+                    @Suppress("DEPRECATION")
+                    val stableTop = insets.stableInsetTop
+                    @Suppress("DEPRECATION")
+                    val fullscreenFlag =
+                        root.systemUiVisibility and View.SYSTEM_UI_FLAG_FULLSCREEN != 0
+                    // If an OEM cannot provide a stable status-bar height, fail open rather than
+                    // hiding the island outside full screen.
+                    fullscreenFlag || (stableTop > 0 && currentTop == 0)
+                }
+                otherAppFullscreen.value = hidden
+                insets
             }
-            view.post { applyPos() }
-            insets
+            addOnAttachStateChangeListener(object : View.OnAttachStateChangeListener {
+                override fun onViewAttachedToWindow(view: View) = view.requestApplyInsets()
+                override fun onViewDetachedFromWindow(view: View) = Unit
+            })
+            @Suppress("DEPRECATION")
+            setOnSystemUiVisibilityChangeListener { requestApplyInsets() }
+            addOnLayoutChangeListener { root, _, _, _, _, _, _, _, _ ->
+                root.requestApplyInsets()
+            }
         }
-        root.addOnAttachStateChangeListener(object : View.OnAttachStateChangeListener {
-            override fun onViewAttachedToWindow(view: View) {
-                view.requestApplyInsets()
-            }
+        val probeParams = WindowManager.LayoutParams(
+            1,
+            1,
+            windowType,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
+                WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
+                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+            PixelFormat.TRANSLUCENT,
+        ).apply {
+            gravity = Gravity.TOP or Gravity.LEFT
+            x = 0
+            y = 0
+        }
+        if (runCatching { wm.addView(probe, probeParams) }.isSuccess) {
+            fullscreenProbe = probe
+        } else {
+            // An unknown reading must never suppress the island.
+            otherAppFullscreen.value = false
+        }
+    }
 
-            override fun onViewDetachedFromWindow(view: View) = Unit
-        })
+    private fun stopFullscreenProbe() {
+        val probe = fullscreenProbe
+        fullscreenProbe = null
+        otherAppFullscreen.value = false
+        if (probe != null) runCatching { wm.removeView(probe) }
     }
 
     private val powerReceiver = object : BroadcastReceiver() {
@@ -357,8 +397,11 @@ class IslandOverlay(
         v.addOnLayoutChangeListener { _, l, t, r, b, ol, ot, or, ob ->
             if (r - l != or - ol || b - t != ob - ot) v.post { applyPos() }
         }
-        // Insets update both camera positioning and full-screen visibility without polling.
-        observeFullscreen(v)
+        // Insets change on rotation/fold state changes even if the pill keeps the same size.
+        v.setOnApplyWindowInsetsListener { _, insets ->
+            v.post { applyPos() }
+            insets
+        }
 
         val added = runCatching { wm.addView(v, lp) }
         if (added.isFailure) {
@@ -374,6 +417,7 @@ class IslandOverlay(
         scope = s
         params = lp
         view = v
+        startFullscreenProbe()
         registerReceivers()
 
         // Replying needs the keyboard: make the window focusable only while the user is typing
@@ -456,6 +500,7 @@ class IslandOverlay(
         // Clear our strong references first so callbacks racing with teardown become no-ops.
         view = null
         params = null
+        stopFullscreenProbe()
         unregisterReceivers()
         scope?.cancel()
         scope = null

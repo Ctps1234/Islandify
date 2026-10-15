@@ -12,6 +12,8 @@ val keystoreProperties = Properties().apply {
         keystorePropertiesFile.inputStream().use(::load)
     }
 }
+// Every CI artifact gets a monotonically increasing code, so Android accepts it as an update.
+val ciVersionCode = System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull()?.let { 10_000 + it }
 
 android {
     namespace = "com.islandify.app"
@@ -21,8 +23,8 @@ android {
         applicationId = "com.islandify.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 2
-        versionName = "1.2"
+        versionCode = ciVersionCode ?: 3
+        versionName = "1.3"
     }
 
     buildFeatures { compose = true }
