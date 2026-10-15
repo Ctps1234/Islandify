@@ -43,6 +43,7 @@ jobs:
       # Same-repository pull requests receive the signing secrets too, making every artifact
       # updatable over the previous one. Fork PRs receive no secrets and safely use the fallback.
       - name: Configure release signing
+        id: signing
         env:
           KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
           KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
@@ -54,6 +55,7 @@ jobs:
 
           if [[ -z "${KEYSTORE_BASE64}" && -z "${KEYSTORE_PASSWORD}" && -z "${KEY_ALIAS}" && -z "${KEY_PASSWORD}" ]]; then
             echo "Signing secrets are not configured; the APK will use the debug signing key."
+            echo "signed=false" >> "${GITHUB_OUTPUT}"
             exit 0
           fi
 
@@ -73,6 +75,7 @@ jobs:
             printf 'keyPassword=%s\n' "${KEY_PASSWORD}"
           } > keystore.properties
           chmod 600 keystore.properties
+          echo "signed=true" >> "${GITHUB_OUTPUT}"
 
       - name: Build optimized release APK
         shell: bash
@@ -92,6 +95,25 @@ jobs:
           ERRORS="${ERRORS//$'\r'/'%0D'}"
           ERRORS="${ERRORS//$'\n'/'%0A'}"
           echo "::error title=Gradle build failed::${ERRORS}"
+
+      - name: Verify permanent release signature
+        if: steps.signing.outputs.signed == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          APKSIGNER="$(find "${ANDROID_HOME}/build-tools" -type f -name apksigner | sort -V | tail -n 1)"
+          if [[ -z "${APKSIGNER}" ]]; then
+            echo "Could not find apksigner." >&2
+            exit 1
+          fi
+          SIGNATURE_INFO="$("${APKSIGNER}" verify --verbose --print-certs app/build/outputs/apk/release/app-release.apk)"
+          printf '%s\n' "${SIGNATURE_INFO}"
+          ACTUAL_SHA256="$(printf '%s\n' "${SIGNATURE_INFO}" | sed -nE 's/^Signer #1 certificate SHA-256 digest: ([0-9a-fA-F]+)$/\1/p' | head -n 1 | tr '[:upper:]' '[:lower:]')"
+          EXPECTED_SHA256="6c76f8864c09ac430cbf89d5a07e10c4926a6f582bf96dcfc3a3f129e21d75f5"
+          if [[ "${ACTUAL_SHA256}" != "${EXPECTED_SHA256}" ]]; then
+            echo "Unexpected APK signing certificate: ${ACTUAL_SHA256:-missing}" >&2
+            exit 1
+          fi
 
       - name: Package APK and checksum
         id: package
