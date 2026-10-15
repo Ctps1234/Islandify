@@ -44,6 +44,7 @@ fun CustomizeScreen() {
     val h by IslandSettings.heightScale.collectAsState()
     val x by IslandSettings.offsetX.collectAsState()
     val y by IslandSettings.offsetY.collectAsState()
+    val autoAlignCamera by IslandSettings.autoAlignCamera.collectAsState()
     val corner by IslandSettings.corner.collectAsState()
     val speed by IslandSettings.animSpeed.collectAsState()
     val glow by IslandSettings.glow.collectAsState()
@@ -65,7 +66,8 @@ fun CustomizeScreen() {
 
     fun nudge(dx: Float, dy: Float) {
         IslandSettings.offsetX.value = (IslandSettings.offsetX.value + dx).coerceIn(-180f, 180f)
-        IslandSettings.offsetY.value = (IslandSettings.offsetY.value + dy).coerceIn(0f, 300f)
+        val yRange = if (IslandSettings.autoAlignCamera.value) -60f..60f else 0f..300f
+        IslandSettings.offsetY.value = (IslandSettings.offsetY.value + dy).coerceIn(yRange)
         IslandSettings.save()
     }
 
@@ -125,13 +127,26 @@ fun CustomizeScreen() {
 
         /* ---------- Position + calibration ---------- */
         SectionCard(title = stringResource(R.string.cust_position), icon = Icons.Rounded.OpenWith) {
+            ToggleRow(
+                icon = Icons.Rounded.CameraFront,
+                title = stringResource(R.string.cust_auto_camera),
+                subtitle = stringResource(R.string.cust_auto_camera_sub),
+                checked = autoAlignCamera,
+                onChange = { enabled ->
+                    IslandSettings.autoAlignCamera.value = enabled
+                    IslandSettings.offsetX.value = 0f
+                    IslandSettings.offsetY.value = if (enabled) 0f else 10f
+                    IslandSettings.save()
+                }
+            )
             CenteredSettingSlider(
                 stringResource(R.string.cust_left_right), Icons.Rounded.SwapHoriz, "${x.toInt()} dp",
                 x, -180f..180f, 0f, { IslandSettings.offsetX.value = it }, { IslandSettings.save() }
             )
             CenteredSettingSlider(
                 stringResource(R.string.cust_up_down), Icons.Rounded.SwapVert, "${y.toInt()} dp",
-                y, 0f..300f, 10f, { IslandSettings.offsetY.value = it }, { IslandSettings.save() }
+                y, if (autoAlignCamera) -60f..60f else 0f..300f, if (autoAlignCamera) 0f else 10f,
+                { IslandSettings.offsetY.value = it }, { IslandSettings.save() }
             )
             Text(
                 stringResource(R.string.cust_nudge_hint),

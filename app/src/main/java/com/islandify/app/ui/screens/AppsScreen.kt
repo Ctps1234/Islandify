@@ -82,6 +82,10 @@ internal fun clearAppIconCache() {
     if (iconCacheHolder.isInitialized()) iconCacheHolder.value.evictAll()
 }
 
+/** Current decoded icon-cache weight in KiB, without initializing the cache just to inspect it. */
+internal fun appIconCacheSizeKib(): Int =
+    if (iconCacheHolder.isInitialized()) iconCacheHolder.value.size() else 0
+
 private tailrec fun Context.findLifecycleOwner(): LifecycleOwner? = when (this) {
     is LifecycleOwner -> this
     is ContextWrapper -> baseContext.findLifecycleOwner()

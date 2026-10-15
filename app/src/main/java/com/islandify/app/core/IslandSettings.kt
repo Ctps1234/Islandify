@@ -123,6 +123,7 @@ object IslandSettings {
     val heightScale = MutableStateFlow(1f)  // 0.7x .. 1.6x
     val offsetX = MutableStateFlow(0f)      // dp, left (-) / right (+) of center
     val offsetY = MutableStateFlow(10f)     // dp, down from the top of the screen
+    val autoAlignCamera = MutableStateFlow(false)
 
     // Every quick pop-up banner type has its own size / text / roundness / show time
     val kindStyles = MutableStateFlow<Map<String, KindStyle>>(emptyMap())
@@ -170,6 +171,7 @@ object IslandSettings {
         heightScale.value = p.getFloat("h", 1f)
         offsetX.value = p.getFloat("x", 0f)
         offsetY.value = p.getFloat("y", 10f)
+        autoAlignCamera.value = p.getBoolean("autoAlignCamera", false)
         kindStyles.value = IslandKind.entries.associate { t ->
             val k = "bn_${t.key}"
             t.key to KindStyle(
@@ -224,6 +226,7 @@ object IslandSettings {
             ?.putFloat("h", heightScale.value)
             ?.putFloat("x", offsetX.value)
             ?.putFloat("y", offsetY.value)
+            ?.putBoolean("autoAlignCamera", autoAlignCamera.value)
             ?.putFloat("corner", corner.value)
             ?.putFloat("speed", animSpeed.value)
             ?.putBoolean("glow", glow.value)
@@ -310,6 +313,7 @@ object IslandSettings {
         heightScale.value = 1f
         offsetX.value = 0f
         offsetY.value = 10f
+        autoAlignCamera.value = false
         save()
     }
 

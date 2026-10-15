@@ -1,5 +1,6 @@
 package com.islandify.app.island
 
+import com.islandify.app.R
 import com.islandify.app.core.*
 import com.islandify.app.ui.components.*
 import com.islandify.app.ui.onboarding.*
@@ -382,7 +383,7 @@ class IslandListener : NotificationListenerService() {
             IslandMode.Notification(
                 app,
                 if (hide) app else title,
-                if (hide) "New notification" else text,
+                if (hide) AppLanguage.wrap(this).getString(R.string.island_new_notification) else text,
                 canReply = reply != null,
                 canMarkRead = markRead != null,
             ),
@@ -610,7 +611,7 @@ class IslandListener : NotificationListenerService() {
         val n = sbn.notification
         val ex = n.extras
         val name = ex.getCharSequence(Notification.EXTRA_TITLE)?.toString().orEmpty()
-            .ifBlank { "Call" }
+            .ifBlank { AppLanguage.wrap(this).getString(R.string.island_call) }
             .bounded(MAX_TITLE_CHARS)
 
         val actions = n.actions.orEmpty()

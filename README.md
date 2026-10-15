@@ -110,7 +110,7 @@ The four swipe directions can each be set to: do nothing, dismiss / hide, clear 
 - **Activities:** turn each activity on or off.
 - **Customize:** see below.
 - **Apps:** search your apps, show system apps, block or allow each one, or **Allow all** / **Block all**.
-- **About:** setup status, device info, gesture list, what Islandify does, and help if taps do not work or the island keeps stopping.
+- **About:** setup status, live memory diagnostics, device info, gesture list, what Islandify does, and help if taps do not work or the island keeps stopping.
 
 First launch opens a short **setup screen** for the permissions.
 
@@ -154,7 +154,7 @@ Some phones (Xiaomi, Oppo, Vivo, Realme, Samsung) close background apps. Set bat
 - On many phones, **Mute** and **Speaker** do not work until the call is answered.
 - The camera cut-out position differs between phones. Use **Auto align with camera**, then fine-tune with the position sliders if the island is slightly off.
 - Two messages from different chats arriving within about 300 ms can show in the wrong order (rare).
-- Text shown inside the island itself (for example "Charging", "Battery low", "Reply") is currently in English only. The rest of the app is available in English, Hindi and Brazilian Portuguese.
+- Islandify translates its own interface and island labels into English, Hindi and Brazilian Portuguese. Text supplied by other apps remains in the language used by those apps.
 
 ## Build from source
 

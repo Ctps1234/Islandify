@@ -1,5 +1,6 @@
 package com.islandify.app.island
 
+import com.islandify.app.R
 import com.islandify.app.core.*
 import com.islandify.app.ui.components.*
 import com.islandify.app.ui.onboarding.*
@@ -103,6 +104,11 @@ object IslandController {
     val replying = _replying.asStateFlow()
 
     fun attach(ctx: Context) { appCtx = ctx.applicationContext }
+
+    private fun localizedString(resId: Int, vararg args: Any): String {
+        val ctx = appCtx ?: return ""
+        return AppLanguage.wrap(ctx).getString(resId, *args)
+    }
 
     private var callKey: String? = null
     private var callAnswer: PendingIntent? = null
@@ -670,7 +676,14 @@ object IslandController {
         }.isSuccess
         _replying.value = false
         if (ok) {
-            flash(IslandMode.Notification("Sent", "Reply sent", text), 1800)
+            flash(
+                IslandMode.Notification(
+                    localizedString(R.string.island_sent),
+                    localizedString(R.string.island_reply_sent),
+                    text
+                ),
+                1800
+            )
         } else {
             endFlash()
         }
@@ -702,7 +715,13 @@ object IslandController {
                 delay(ms - (left - 1) * 1000L)   // sleep until the next whole second boundary
             }
             timerMode = null
-            flash(IslandMode.Notification("Timer", "Time's up!", "$seconds sec complete"))
+            flash(
+                IslandMode.Notification(
+                    localizedString(R.string.island_timer),
+                    localizedString(R.string.island_time_up),
+                    localizedString(R.string.island_seconds_complete, seconds)
+                )
+            )
         }
     }
 
@@ -747,9 +766,15 @@ object IslandController {
             }
             timerMode = null
             extKey = null
-            flash(IslandMode.Notification("Timer", "Time's up!", "Timer complete"))
+            flash(timerCompleteNotification())
         }
     }
+
+    private fun timerCompleteNotification() = IslandMode.Notification(
+        localizedString(R.string.island_timer),
+        localizedString(R.string.island_time_up),
+        localizedString(R.string.island_timer_complete),
+    )
 
     /** Clock ki notification hati / pause hui. Khatam hone ke paas thi to "Time's up". */
     fun clearClockTimer(key: String? = null) {
@@ -757,7 +782,7 @@ object IslandController {
         if (key != null && key != k) return
         val left = extEnd - SystemClock.elapsedRealtime()
         dropClockTimer()
-        if (left in 0L..2000L) flash(IslandMode.Notification("Timer", "Time's up!", "Timer complete"))
+        if (left in 0L..2000L) flash(timerCompleteNotification())
     }
 
     /** Settings changed (Timer off / Clock app blocked): remove the Clock timer without a "Time's up" banner. */

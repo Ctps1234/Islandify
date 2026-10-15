@@ -230,4 +230,61 @@
     <string name="swipe_act_next">Próxima faixa</string>
     <string name="swipe_act_prev">Faixa anterior</string>
     <string name="swipe_act_playpause">Reproduzir / pausar</string>
+
+    <!-- Alinhamento da câmera -->
+    <string name="cust_auto_camera">Alinhar automaticamente com a câmera frontal</string>
+    <string name="cust_auto_camera_sub">Centraliza a ilha no recorte superior da câmera. Os controles de posição passam a fazer ajustes finos.</string>
+
+    <!-- Diagnóstico -->
+    <string name="diag_title">Diagnóstico</string>
+    <string name="diag_description">Informações em tempo real do processo do Islandify. Os valores são atualizados a cada 5 segundos.</string>
+    <string name="diag_ram">RAM do processo</string>
+    <string name="diag_heap">Heap Java</string>
+    <string name="diag_icon_cache">Cache de ícones</string>
+    <string name="diag_queue">Pop-ups na fila</string>
+    <string name="diag_service">Serviço da ilha</string>
+    <string name="diag_heap_value">%1$s usados de %2$s</string>
+    <string name="diag_queue_value">%1$d aguardando</string>
+    <string name="diag_clear_cache">Limpar cache de ícones</string>
+    <string name="diag_cache_empty">Vazio</string>
+
+    <!-- Texto exibido dentro da própria ilha -->
+    <string name="island_silent">Silencioso</string>
+    <string name="island_sound_on">Som ativado</string>
+    <string name="island_vibrate">Vibrar</string>
+    <string name="island_dnd">Não Perturbe</string>
+    <string name="island_dnd_off">Não Perturbe desativado</string>
+    <string name="island_flashlight_on">Lanterna ligada</string>
+    <string name="island_flashlight_off">Lanterna desligada</string>
+    <string name="island_ringer_off">O toque está desativado</string>
+    <string name="island_ringer_back">O toque está ativado novamente</string>
+    <string name="island_ringer_vibrate">O toque está apenas no modo vibrar</string>
+    <string name="island_calls_muted">Chamadas e alertas estão silenciados</string>
+    <string name="island_alerts_back">Os alertas estão ativados novamente</string>
+    <string name="island_torch_on">A lanterna está ligada</string>
+    <string name="island_torch_off">A lanterna está desligada</string>
+    <string name="island_charging">Carregando</string>
+    <string name="island_charger_removed">Carregador removido</string>
+    <string name="island_power_connected">Energia conectada</string>
+    <string name="island_unplugged">Desconectado</string>
+    <string name="island_battery_very_low">Bateria muito fraca</string>
+    <string name="island_battery_low">Bateria fraca</string>
+    <string name="island_plug_charger">Conecte o carregador</string>
+    <string name="island_connected">Conectado</string>
+    <string name="island_mark_read">Marcar como lida</string>
+    <string name="island_reply">Responder</string>
+    <string name="island_unknown">Desconhecido</string>
+    <string name="island_clock_timer">Temporizador do relógio</string>
+    <string name="island_timer">Temporizador</string>
+    <string name="island_incoming_call">Chamada recebida</string>
+    <string name="island_reply_hint">Responder…</string>
+    <string name="island_new_notification">Nova notificação</string>
+    <string name="island_bluetooth_device">Dispositivo Bluetooth</string>
+    <string name="island_wired_headphones">Fones de ouvido com fio</string>
+    <string name="island_call">Chamada</string>
+    <string name="island_sent">Enviado</string>
+    <string name="island_reply_sent">Resposta enviada</string>
+    <string name="island_time_up">O tempo acabou!</string>
+    <string name="island_seconds_complete">%1$d segundos concluídos</string>
+    <string name="island_timer_complete">Temporizador concluído</string>
 </resources>

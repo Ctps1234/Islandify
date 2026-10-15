@@ -21,6 +21,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.launch
 
 /**
@@ -48,17 +49,21 @@ class IslandService : Service() {
                 if (a11y || !Perms.overlay(this@IslandService)) o.hide() else o.show()
             }
         }
+        scope.launch {
+            AppLanguage.changes.drop(1).collect { startAsForeground() }
+        }
         running.value = true
     }
 
     private fun startAsForeground() {
+        val strings = AppLanguage.wrap(this)
         val nm = getSystemService(NotificationManager::class.java)
         // ROMs cache the notification icon per channel / notification id / icon resource.
         // So everything is new now (channel, id and icon name), and the old ones are removed.
         OLD_CHANNEL_IDS.forEach { runCatching { nm.deleteNotificationChannel(it) } }
         OLD_NOTIF_IDS.forEach { runCatching { nm.cancel(it) } }
         nm.createNotificationChannel(
-            NotificationChannel(CHANNEL_ID, getString(R.string.notif_channel), NotificationManager.IMPORTANCE_MIN).apply {
+            NotificationChannel(CHANNEL_ID, strings.getString(R.string.notif_channel), NotificationManager.IMPORTANCE_MIN).apply {
                 setShowBadge(false)
             }
         )
@@ -70,8 +75,8 @@ class IslandService : Service() {
         val n = NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_stat_islandify)
             .setColor(0xFF7B3DF5.toInt())
-            .setContentTitle(getString(R.string.notif_title))
-            .setContentText(getString(R.string.notif_text))
+            .setContentTitle(strings.getString(R.string.notif_title))
+            .setContentText(strings.getString(R.string.notif_text))
             .setContentIntent(open)
             .setCategory(NotificationCompat.CATEGORY_SERVICE)
             .setOngoing(true)

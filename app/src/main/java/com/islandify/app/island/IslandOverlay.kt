@@ -1,5 +1,6 @@
 package com.islandify.app.island
 
+import com.islandify.app.R
 import com.islandify.app.core.*
 
 import android.bluetooth.BluetoothClass
@@ -46,6 +47,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.launch
 
 /**
@@ -174,7 +176,8 @@ class IslandOverlay(
                     val dev: BluetoothDevice? = if (Build.VERSION.SDK_INT >= 33)
                         i.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE, BluetoothDevice::class.java)
                     else @Suppress("DEPRECATION") i.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE)
-                    val name = runCatching { dev?.name }.getOrNull() ?: "Bluetooth device"
+                    val name = runCatching { dev?.name }.getOrNull()
+                        ?: AppLanguage.wrap(c).getString(R.string.island_bluetooth_device)
                     val headphones = runCatching {
                         dev?.bluetoothClass?.majorDeviceClass == BluetoothClass.Device.Major.AUDIO_VIDEO
                     }.getOrDefault(false)
@@ -182,7 +185,12 @@ class IslandOverlay(
                 }
                 Intent.ACTION_HEADSET_PLUG -> if (i.getIntExtra("state", 0) == 1) {
                     IslandController.flash(
-                        IslandMode.Device(i.getStringExtra("name") ?: "Wired headphones", true), 3000
+                        IslandMode.Device(
+                            i.getStringExtra("name")
+                                ?: AppLanguage.wrap(c).getString(R.string.island_wired_headphones),
+                            true
+                        ),
+                        3000
                     )
                 }
             }
@@ -220,7 +228,9 @@ class IslandOverlay(
             }
         }
 
-        val v = ComposeView(host).apply {
+        // Services keep the system locale even when the user picked a language inside the app.
+        // Build the overlay with the saved locale so its own labels are translated as well.
+        val v = ComposeView(AppLanguage.wrap(host)).apply {
             setViewTreeLifecycleOwner(o)
             setViewTreeSavedStateRegistryOwner(o)
             setViewTreeViewModelStoreOwner(o)
@@ -302,9 +312,14 @@ class IslandOverlay(
             false
         }
 
-        // Whenever the window size changes (pill grows / shrinks), re-center it ourselves
-        v.addOnLayoutChangeListener { _, l, _, r, _, ol, _, or, _ ->
-            if (r - l != or - ol) v.post { applyPos() }
+        // Whenever the window size changes (pill grows / shrinks), re-center it ourselves.
+        v.addOnLayoutChangeListener { _, l, t, r, b, ol, ot, or, ob ->
+            if (r - l != or - ol || b - t != ob - ot) v.post { applyPos() }
+        }
+        // Insets change on rotation/fold state changes even if the pill itself keeps the same size.
+        v.setOnApplyWindowInsetsListener { _, insets ->
+            v.post { applyPos() }
+            insets
         }
 
         val added = runCatching { wm.addView(v, lp) }
@@ -334,10 +349,26 @@ class IslandOverlay(
             }
         }
 
-        // Sliders in the app move the island live
+        // Sliders and camera alignment move the island live.
         s.launch {
-            combine(IslandSettings.offsetX, IslandSettings.offsetY) { x, y -> x to y }
-                .collect { applyPos() }
+            combine(
+                IslandSettings.offsetX,
+                IslandSettings.offsetY,
+                IslandSettings.autoAlignCamera,
+            ) { _, _, _ -> Unit }.collect { applyPos() }
+        }
+
+        // Rebuild the ComposeView when the in-app language changes; service contexts are otherwise
+        // unaffected by Activity.recreate(). The post survives cancellation of this overlay scope.
+        s.launch {
+            AppLanguage.changes.drop(1).collect {
+                v.post {
+                    if (view === v) {
+                        hide()
+                        show()
+                    }
+                }
+            }
         }
     }
 
@@ -345,13 +376,36 @@ class IslandOverlay(
         if (Build.VERSION.SDK_INT >= 30) wm.currentWindowMetrics.bounds.width()
         else host.resources.displayMetrics.widthPixels
 
-    /** Center the window horizontally (+ user offset) and apply the vertical offset. */
+    private fun screenH(): Int =
+        if (Build.VERSION.SDK_INT >= 30) wm.currentWindowMetrics.bounds.height()
+        else host.resources.displayMetrics.heightPixels
+
+    /** The top display cutout is normally the front camera/notch; ignore bottom/hinge cutouts. */
+    private fun cameraCutout(v: ComposeView): android.graphics.Rect? {
+        if (Build.VERSION.SDK_INT < 28) return null
+        val cutout = if (Build.VERSION.SDK_INT >= 30) {
+            wm.currentWindowMetrics.windowInsets.displayCutout
+        } else {
+            v.rootWindowInsets?.displayCutout
+        } ?: return null
+        val topThird = screenH() / 3
+        return cutout.boundingRects
+            .asSequence()
+            .filter { !it.isEmpty && it.centerY() <= topThird }
+            .minByOrNull { it.top }
+    }
+
+    /** Center on the front camera when available, then apply the user's fine-tuning offsets. */
     private fun applyPos() {
         val v = view ?: return
         val p = params ?: return
         if (v.width <= 0) return
-        val nx = (screenW() - v.width) / 2 + (IslandSettings.offsetX.value * density).toInt()
-        val ny = (IslandSettings.offsetY.value * density).toInt()
+        val auto = IslandSettings.autoAlignCamera.value
+        val cutout = if (auto) cameraCutout(v) else null
+        val baseCenterX = cutout?.centerX() ?: screenW() / 2
+        val baseY = cutout?.let { (it.centerY() - v.height / 2).coerceAtLeast(0) } ?: 0
+        val nx = baseCenterX - v.width / 2 + (IslandSettings.offsetX.value * density).toInt()
+        val ny = (if (auto) baseY else 0) + (IslandSettings.offsetY.value * density).toInt()
         if (p.x != nx || p.y != ny) {
             p.x = nx
             p.y = ny

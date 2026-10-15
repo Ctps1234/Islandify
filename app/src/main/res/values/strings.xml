@@ -230,4 +230,61 @@
     <string name="swipe_act_next">Next track</string>
     <string name="swipe_act_prev">Previous track</string>
     <string name="swipe_act_playpause">Play / pause</string>
+
+    <!-- Camera alignment -->
+    <string name="cust_auto_camera">Auto align with front camera</string>
+    <string name="cust_auto_camera_sub">Centers the island on the top camera cutout. Position controls become fine adjustments.</string>
+
+    <!-- Diagnostics -->
+    <string name="diag_title">Diagnostics</string>
+    <string name="diag_description">Live information from the Islandify process. Values update every 5 seconds.</string>
+    <string name="diag_ram">Process RAM</string>
+    <string name="diag_heap">Java heap</string>
+    <string name="diag_icon_cache">App icon cache</string>
+    <string name="diag_queue">Queued pop-ups</string>
+    <string name="diag_service">Island service</string>
+    <string name="diag_heap_value">%1$s used of %2$s</string>
+    <string name="diag_queue_value">%1$d waiting</string>
+    <string name="diag_clear_cache">Clear icon cache</string>
+    <string name="diag_cache_empty">Empty</string>
+
+    <!-- Text drawn inside the island itself -->
+    <string name="island_silent">Silent</string>
+    <string name="island_sound_on">Sound on</string>
+    <string name="island_vibrate">Vibrate</string>
+    <string name="island_dnd">Do Not Disturb</string>
+    <string name="island_dnd_off">Do Not Disturb off</string>
+    <string name="island_flashlight_on">Flashlight on</string>
+    <string name="island_flashlight_off">Flashlight off</string>
+    <string name="island_ringer_off">Ringer is off</string>
+    <string name="island_ringer_back">Ringer is back on</string>
+    <string name="island_ringer_vibrate">Ringer vibrates only</string>
+    <string name="island_calls_muted">Calls and alerts are muted</string>
+    <string name="island_alerts_back">Alerts are back</string>
+    <string name="island_torch_on">Torch is on</string>
+    <string name="island_torch_off">Torch is off</string>
+    <string name="island_charging">Charging</string>
+    <string name="island_charger_removed">Charger removed</string>
+    <string name="island_power_connected">Power connected</string>
+    <string name="island_unplugged">Unplugged</string>
+    <string name="island_battery_very_low">Battery very low</string>
+    <string name="island_battery_low">Battery low</string>
+    <string name="island_plug_charger">Plug in your charger</string>
+    <string name="island_connected">Connected</string>
+    <string name="island_mark_read">Mark as read</string>
+    <string name="island_reply">Reply</string>
+    <string name="island_unknown">Unknown</string>
+    <string name="island_clock_timer">Clock timer</string>
+    <string name="island_timer">Timer</string>
+    <string name="island_incoming_call">Incoming call</string>
+    <string name="island_reply_hint">Reply…</string>
+    <string name="island_new_notification">New notification</string>
+    <string name="island_bluetooth_device">Bluetooth device</string>
+    <string name="island_wired_headphones">Wired headphones</string>
+    <string name="island_call">Call</string>
+    <string name="island_sent">Sent</string>
+    <string name="island_reply_sent">Reply sent</string>
+    <string name="island_time_up">Time’s up!</string>
+    <string name="island_seconds_complete">%1$d seconds complete</string>
+    <string name="island_timer_complete">Timer complete</string>
 </resources>
