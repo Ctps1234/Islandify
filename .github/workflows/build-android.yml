@@ -29,16 +29,16 @@ jobs:
 
     steps:
       - name: Check out source
-        uses: actions/checkout@v4
+        uses: actions/checkout@v8
 
       - name: Set up Java 17
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: "17"
 
       - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
+        uses: gradle/actions/setup-gradle@v7
 
       # Signing secrets are deliberately unavailable to pull-request builds. If the four
       # secrets are not configured, Gradle falls back to an installable debug-signed APK.
@@ -103,7 +103,7 @@ jobs:
           echo "artifact_name=${ARTIFACT_NAME}" >> "${GITHUB_OUTPUT}"
 
       - name: Upload APK
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ steps.package.outputs.artifact_name }}
           path: release/
@@ -120,7 +120,7 @@ jobs:
 
     steps:
       - name: Download built APK
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v6
         with:
           name: ${{ needs.build.outputs.artifact_name }}
           path: release
