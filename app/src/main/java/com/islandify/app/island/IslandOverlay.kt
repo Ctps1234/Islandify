@@ -19,6 +19,8 @@ import android.os.BatteryManager
 import android.os.Build
 import android.view.Gravity
 import android.view.MotionEvent
+import android.view.View
+import android.view.WindowInsets
 import android.view.WindowManager
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.spring
@@ -46,6 +48,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.launch
@@ -74,8 +77,37 @@ class IslandOverlay(
     private var view: ComposeView? = null
     private var params: WindowManager.LayoutParams? = null
     private var receiversOn = false
+    private val otherAppFullscreen = MutableStateFlow(false)
 
     val shown: Boolean get() = view != null
+
+    /**
+     * Window insets are dispatched when the foreground app changes system-bar visibility, so
+     * this stays event-driven and never inspects screen contents or polls the foreground app.
+     */
+    private fun observeFullscreen(root: View) {
+        root.setOnApplyWindowInsetsListener { view, insets ->
+            otherAppFullscreen.value = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                !insets.isVisible(WindowInsets.Type.statusBars())
+            } else {
+                @Suppress("DEPRECATION")
+                val insetHidden = insets.systemWindowInsetTop == 0
+                @Suppress("DEPRECATION")
+                val fullscreenFlag =
+                    view.systemUiVisibility and View.SYSTEM_UI_FLAG_FULLSCREEN != 0
+                insetHidden || fullscreenFlag
+            }
+            view.post { applyPos() }
+            insets
+        }
+        root.addOnAttachStateChangeListener(object : View.OnAttachStateChangeListener {
+            override fun onViewAttachedToWindow(view: View) {
+                view.requestApplyInsets()
+            }
+
+            override fun onViewDetachedFromWindow(view: View) = Unit
+        })
+    }
 
     private val powerReceiver = object : BroadcastReceiver() {
         override fun onReceive(c: Context, i: Intent) {
@@ -250,6 +282,14 @@ class IslandOverlay(
                     val queued by IslandController.queued.collectAsState()
                     val secondary by IslandController.secondary.collectAsState()
                     val idlePill by IslandSettings.idlePill.collectAsState()
+                    val fullscreen by otherAppFullscreen.collectAsState()
+                    val fullscreenBehavior by IslandSettings.fullscreenBehavior.collectAsState()
+                    val allowedInFullscreen = !fullscreen || when (fullscreenBehavior) {
+                        FullscreenBehavior.ShowAll -> true
+                        FullscreenBehavior.HideIdle -> mode !is IslandMode.Idle
+                        FullscreenBehavior.AlertsOnly ->
+                            mode is IslandMode.Notification || mode is IslandMode.Call
+                    }
                     // Nothing happening -> the island is not on screen at all.
                     // It grows out of the top when an activity starts and shrinks away when it ends.
                     val last = remember { LastMode() }
@@ -264,8 +304,9 @@ class IslandOverlay(
                     }
 
                     AnimatedVisibility(
-                        // Idle pill stays on screen so there is always something to tap (time / date / battery)
-                        visible = mode !is IslandMode.Idle || idlePill,
+                        // Full-screen suppression keeps alerts event-driven: a notification or call
+                        // appears immediately, then the underlying mode is hidden again when it ends.
+                        visible = allowedInFullscreen && (mode !is IslandMode.Idle || idlePill),
                         // Fast + snappy: no slow spring, appears almost instantly
                         enter = scaleIn(tween(140), 0.6f, TransformOrigin(0.5f, 0f)) + fadeIn(tween(90)),
                         exit = scaleOut(tween(160), 0.6f, TransformOrigin(0.5f, 0f)) + fadeOut(tween(140)),
@@ -316,11 +357,8 @@ class IslandOverlay(
         v.addOnLayoutChangeListener { _, l, t, r, b, ol, ot, or, ob ->
             if (r - l != or - ol || b - t != ob - ot) v.post { applyPos() }
         }
-        // Insets change on rotation/fold state changes even if the pill itself keeps the same size.
-        v.setOnApplyWindowInsetsListener { _, insets ->
-            v.post { applyPos() }
-            insets
-        }
+        // Insets update both camera positioning and full-screen visibility without polling.
+        observeFullscreen(v)
 
         val added = runCatching { wm.addView(v, lp) }
         if (added.isFailure) {

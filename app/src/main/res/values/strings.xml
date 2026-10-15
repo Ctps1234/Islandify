@@ -235,6 +235,13 @@
     <string name="cust_auto_camera">Auto align with front camera</string>
     <string name="cust_auto_camera_sub">Centers the island on the top camera cutout. Position controls become fine adjustments.</string>
 
+    <!-- Full-screen behavior -->
+    <string name="cust_fullscreen">When another app is full screen</string>
+    <string name="cust_fullscreen_sub">Choose what stays visible while videos, games or other immersive apps hide the status bar. Calls always count as alerts.</string>
+    <string name="fullscreen_show_all">Always</string>
+    <string name="fullscreen_hide_idle">Hide idle</string>
+    <string name="fullscreen_alerts_only">Alerts only</string>
+
     <!-- Diagnostics -->
     <string name="diag_title">Diagnostics</string>
     <string name="diag_description">Live information from the Islandify process. Values update every 5 seconds.</string>

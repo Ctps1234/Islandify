@@ -235,6 +235,13 @@
     <string name="cust_auto_camera">फ्रंट कैमरे से अपने-आप अलाइन करें</string>
     <string name="cust_auto_camera_sub">आइलैंड को ऊपर के कैमरा कटआउट पर बीच में रखता है। पोज़िशन कंट्रोल बारीक बदलाव करते हैं।</string>
 
+    <!-- फ़ुल-स्क्रीन व्यवहार -->
+    <string name="cust_fullscreen">जब दूसरा ऐप फ़ुल स्क्रीन में हो</string>
+    <string name="cust_fullscreen_sub">वीडियो, गेम या दूसरे इमर्सिव ऐप स्टेटस बार छिपाएँ तो क्या दिखे, यह चुनें। कॉल हमेशा अलर्ट मानी जाती हैं।</string>
+    <string name="fullscreen_show_all">हमेशा</string>
+    <string name="fullscreen_hide_idle">खाली पिल छिपाएँ</string>
+    <string name="fullscreen_alerts_only">केवल अलर्ट</string>
+
     <!-- डायग्नोस्टिक्स -->
     <string name="diag_title">डायग्नोस्टिक्स</string>
     <string name="diag_description">Islandify प्रोसेस की लाइव जानकारी। मान हर 5 सेकंड में अपडेट होते हैं।</string>

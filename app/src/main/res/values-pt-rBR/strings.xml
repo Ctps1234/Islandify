@@ -235,6 +235,13 @@
     <string name="cust_auto_camera">Alinhar automaticamente com a câmera frontal</string>
     <string name="cust_auto_camera_sub">Centraliza a ilha no recorte superior da câmera. Os controles de posição passam a fazer ajustes finos.</string>
 
+    <!-- Comportamento em tela cheia -->
+    <string name="cust_fullscreen">Quando outro app estiver em tela cheia</string>
+    <string name="cust_fullscreen_sub">Escolha o que permanece visível enquanto vídeos, jogos ou outros apps imersivos ocultam a barra de status. Chamadas sempre contam como alertas.</string>
+    <string name="fullscreen_show_all">Sempre</string>
+    <string name="fullscreen_hide_idle">Ocultar ociosa</string>
+    <string name="fullscreen_alerts_only">Só alertas</string>
+
     <!-- Diagnóstico -->
     <string name="diag_title">Diagnóstico</string>
     <string name="diag_description">Informações em tempo real do processo do Islandify. Os valores são atualizados a cada 5 segundos.</string>

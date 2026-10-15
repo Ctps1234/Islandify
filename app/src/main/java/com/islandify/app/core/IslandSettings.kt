@@ -115,6 +115,17 @@ enum class SwipeAction(val key: String, @StringRes val label: Int) {
     }
 }
 
+/** What remains visible when another app hides the status bar. */
+enum class FullscreenBehavior(val key: String, @StringRes val label: Int) {
+    ShowAll("all", R.string.fullscreen_show_all),
+    HideIdle("idle", R.string.fullscreen_hide_idle),
+    AlertsOnly("alerts", R.string.fullscreen_alerts_only);
+
+    companion object {
+        fun from(key: String?) = entries.firstOrNull { it.key == key } ?: ShowAll
+    }
+}
+
 object IslandSettings {
     private var prefs: SharedPreferences? = null
 
@@ -145,6 +156,7 @@ object IslandSettings {
     val islandAppAccent = MutableStateFlow(false)                // island glow uses the app accent instead of album art
     val autoCollapseSec = MutableStateFlow(6)                    // expanded card collapses by itself (0 = never)
     val idlePill = MutableStateFlow(true)                        // small pill stays on screen when idle (tap = time / date / battery)
+    val fullscreenBehavior = MutableStateFlow(FullscreenBehavior.ShowAll)
     val swipeSkip = MutableStateFlow(true)                       // swipe left/right on the island to skip tracks
     val stickyNotif = MutableStateFlow(false)                    // notifications stay on the island until tapped / swiped away
     val swipeUp = MutableStateFlow(SwipeAction.Dismiss)
@@ -203,6 +215,7 @@ object IslandSettings {
         bgColor.value = p.getInt("bgColor", 0xFF14121C.toInt())
         islandAppAccent.value = p.getBoolean("islandAppAccent", false)
         autoCollapseSec.value = p.getInt("autoCollapse", 6)
+        fullscreenBehavior.value = FullscreenBehavior.from(p.getString("fullscreenBehavior", null))
         swipeSkip.value = p.getBoolean("swipeSkip", true)
         stickyNotif.value = p.getBoolean("stickyNotif", false)
         swipeUp.value = SwipeAction.from(p.getString("swipeUp", null), SwipeAction.Dismiss)
@@ -241,6 +254,7 @@ object IslandSettings {
             ?.putInt("bgColor", bgColor.value)
             ?.putBoolean("islandAppAccent", islandAppAccent.value)
             ?.putInt("autoCollapse", autoCollapseSec.value)
+            ?.putString("fullscreenBehavior", fullscreenBehavior.value.key)
             ?.putBoolean("swipeSkip", swipeSkip.value)
             ?.putBoolean("stickyNotif", stickyNotif.value)
             ?.putString("swipeUp", swipeUp.value.key)
@@ -325,6 +339,7 @@ object IslandSettings {
         autoCollapseSec.value = 6
         swipeSkip.value = true
         stickyNotif.value = false
+        fullscreenBehavior.value = FullscreenBehavior.ShowAll
         swipeUp.value = SwipeAction.Dismiss
         swipeDown.value = SwipeAction.None
         swipeLeft.value = SwipeAction.NextTrack

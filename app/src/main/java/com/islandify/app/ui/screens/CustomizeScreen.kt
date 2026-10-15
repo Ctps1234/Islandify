@@ -62,6 +62,7 @@ fun CustomizeScreen() {
     val swRight by IslandSettings.swipeRight.collectAsState()
     val stickyNotif by IslandSettings.stickyNotif.collectAsState()
     val idlePill by IslandSettings.idlePill.collectAsState()
+    val fullscreenBehavior by IslandSettings.fullscreenBehavior.collectAsState()
     val dynamicOk = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
 
     fun nudge(dx: Float, dy: Float) {
@@ -182,6 +183,45 @@ fun CustomizeScreen() {
                 subtitle = stringResource(R.string.cust_idle_pill_sub),
                 checked = idlePill, onChange = { IslandSettings.idlePill.value = it; IslandSettings.save() }
             )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Rounded.Fullscreen, null, tint = MaterialTheme.colorScheme.primary)
+                Spacer(Modifier.width(12.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        stringResource(R.string.cust_fullscreen),
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = androidx.compose.ui.text.font.FontWeight.Medium
+                    )
+                    Text(
+                        stringResource(R.string.cust_fullscreen_sub),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+            SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
+                FullscreenBehavior.entries.forEachIndexed { index, behavior ->
+                    SegmentedButton(
+                        selected = fullscreenBehavior == behavior,
+                        onClick = {
+                            IslandSettings.fullscreenBehavior.value = behavior
+                            IslandSettings.save()
+                        },
+                        shape = SegmentedButtonDefaults.itemShape(
+                            index = index,
+                            count = FullscreenBehavior.entries.size
+                        ),
+                        icon = {},
+                        label = {
+                            Text(
+                                stringResource(behavior.label),
+                                maxLines = 1,
+                                style = MaterialTheme.typography.labelSmall
+                            )
+                        }
+                    )
+                }
+            }
             ToggleRow(
                 icon = Icons.Rounded.PushPin, title = stringResource(R.string.cust_sticky_notif),
                 subtitle = stringResource(R.string.cust_sticky_notif_sub),
