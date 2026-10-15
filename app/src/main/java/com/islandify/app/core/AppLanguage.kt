@@ -5,13 +5,15 @@ import android.content.res.Configuration
 import java.util.Locale
 
 /**
- * In-app language choice: "" = follow the phone, "en" = English, "hi" = Hindi.
+ * In-app language choice: "" = follow the phone, "en" = English, "hi" = Hindi,
+ * "pt-BR" = Brazilian Portuguese.
  * Stored on its own so it can be read in attachBaseContext, before IslandSettings is initialised.
  */
 object AppLanguage {
     const val SYSTEM = ""
     const val ENGLISH = "en"
     const val HINDI = "hi"
+    const val PORTUGUESE_BRAZIL = "pt-BR"
 
     private fun prefs(ctx: Context) =
         ctx.applicationContext.getSharedPreferences("islandify", Context.MODE_PRIVATE)

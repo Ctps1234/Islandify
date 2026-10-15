@@ -5,7 +5,7 @@
 
 # Islandify
 
-**Dynamic Island for Android.** A small black pill at the top of your screen that grows into a banner or a card for notifications, calls, music, charging, timers, navigation, deliveries and more. Messages wait as small bubbles next to the pill. Everything can be customized, and the app is available in **English and Hindi**.
+**Dynamic Island for Android.** A small black pill at the top of your screen that grows into a banner or a card for notifications, calls, music, charging, timers, navigation, deliveries and more. Messages wait as small bubbles next to the pill. Everything can be customized, and the app is available in **English, Hindi and Brazilian Portuguese**.
 
 Built with Kotlin, Jetpack Compose and Material 3.
 
@@ -128,7 +128,7 @@ Customize has four groups: **Pill** (opens Placement, Visuals, Duration and Beha
 | **Message card** | Width, up / down, corner, text size, opacity, accent strength, message lines, text auto-scroll speed, buttons, bubbles row, and swipe distances. |
 | **Banner** | Width, height, up / down, corner, text size, opacity, glow strength, second line and badge. |
 
-App-wide options on the main Customize page: theme (System, Light, Dark, AMOLED), accent color (wallpaper colors with Material You, or your own color), app background (default or tinted, with color, brightness and strength), **language (English or Hindi)**, **Backup and restore** (save all settings to a file and load them back) and **Reset everything**.
+App-wide options on the main Customize page: theme (System, Light, Dark, AMOLED), accent color (wallpaper colors with Material You, or your own color), app background (default or tinted, with color, brightness and strength), **language (English, Hindi or Brazilian Portuguese)**, **Backup and restore** (save all settings to a file and load them back) and **Reset everything**.
 
 A **Quick Settings tile** turns the island on and off.
 
@@ -154,7 +154,7 @@ Some phones (Xiaomi, Oppo, Vivo, Realme, Samsung) close background apps. Set bat
 - On many phones, **Mute** and **Speaker** do not work until the call is answered.
 - The camera cut-out position differs between phones. Use **Auto align with camera**, then fine-tune with the position sliders if the island is slightly off.
 - Two messages from different chats arriving within about 300 ms can show in the wrong order (rare).
-- Text shown inside the island itself (for example "Charging", "Battery low", "Reply") is currently in English only. The rest of the app is in English and Hindi.
+- Text shown inside the island itself (for example "Charging", "Battery low", "Reply") is currently in English only. The rest of the app is available in English, Hindi and Brazilian Portuguese.
 
 ## Build from source
 
@@ -172,6 +172,19 @@ The APK is created in `app/build/outputs/apk/release/`.
 - Use the **release** build for real speed. Debug builds are much slower in Compose.
 - Release builds use code shrinking (`isMinifyEnabled`, `isShrinkResources`).
 
+### Automated GitHub builds
+
+The [Build Android APK](.github/workflows/build-android.yml) workflow builds an optimized release APK for every pull request and every push to `main`. You can also run it manually from the **Actions** tab. The APK and its SHA-256 checksum are available in the completed run under **Artifacts** for 30 days.
+
+Pushing a tag whose name starts with `v` (for example, `v1.3`) also creates a GitHub Release and attaches the APK and checksum. For stable production signing, configure these repository Actions secrets:
+
+- `ANDROID_KEYSTORE_BASE64`: the release keystore encoded with `base64`.
+- `ANDROID_KEYSTORE_PASSWORD`: the keystore password.
+- `ANDROID_KEY_ALIAS`: the signing key alias.
+- `ANDROID_KEY_PASSWORD`: the signing key password.
+
+If those secrets are absent, the workflow still creates an installable debug-signed release APK. Signing secrets are never exposed to pull-request builds.
+
 ## Project layout
 
 ```
@@ -182,7 +195,8 @@ app/src/main/java/com/islandify/app/
              and foreground services, Quick Settings tile
   ui/        screens (Home, Activities, Customize, Apps, About, Onboarding),
              shared components, theme and palette
-app/src/main/res/  values/strings.xml (English), values-hi/strings.xml (Hindi)
+app/src/main/res/  values/strings.xml (English), values-hi/strings.xml (Hindi),
+                   values-pt-rBR/strings.xml (Brazilian Portuguese)
 ```
 
 ## Tech stack
@@ -214,7 +228,7 @@ Everything runs on your device. Islandify does **not** request the Internet perm
 
 ## Contributing
 
-Issues and pull requests are welcome. If you change the UI, please add a screenshot to `docs/images/`. Add every new text to both `values/strings.xml` and `values-hi/strings.xml`.
+Issues and pull requests are welcome. If you change the UI, please add a screenshot to `docs/images/`. Add every new text to `values/strings.xml`, `values-hi/strings.xml` and `values-pt-rBR/strings.xml`.
 
 ## License
 

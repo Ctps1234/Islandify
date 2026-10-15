@@ -302,6 +302,7 @@ fun CustomizeScreen() {
                 AppLanguage.SYSTEM to stringResource(R.string.theme_system),
                 AppLanguage.ENGLISH to "English",
                 AppLanguage.HINDI to "हिन्दी",
+                AppLanguage.PORTUGUESE_BRAZIL to "Português",
             )
             SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
                 options.forEachIndexed { i, (code, name) ->
