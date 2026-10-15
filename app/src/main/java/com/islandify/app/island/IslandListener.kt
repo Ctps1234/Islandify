@@ -29,6 +29,9 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.launch
+import java.lang.ref.WeakReference
+import kotlin.math.max
+import kotlin.math.roundToInt
 
 /** Shows notifications + calls, and tracks the active media session. */
 class IslandListener : NotificationListenerService() {
@@ -36,17 +39,21 @@ class IslandListener : NotificationListenerService() {
     private var sessions: List<MediaController> = emptyList()
     private var controller: MediaController? = null
     private lateinit var msm: MediaSessionManager
+    private var watchingSessions = false
     private val cn by lazy { ComponentName(this, IslandListener::class.java) }
 
-    // So we do not re-extract the color from the art on every metadata / state change
-    private var lastArt: Bitmap? = null
+    // Keep only a display-sized copy. Media apps often publish 1000-3000 px artwork, while the
+    // island never draws it above 64 dp. Holding the source bitmap could waste tens of MiB.
+    private var artSource: WeakReference<Bitmap>? = null
+    private var displayArt: Bitmap? = null
     private var lastAccent: Int? = null
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private var settingsJob: Job? = null
 
-    // key -> signature of the last notification shown (same notification re-posted = skip)
-    private val shown = HashMap<String, Int>()
+    // key -> signature of the last notification shown (same notification re-posted = skip).
+    // Bound it defensively in case a broken app never sends removal callbacks.
+    private val shown = LinkedHashMap<String, Int>()
 
     private val callback = object : MediaController.Callback() {
         override fun onMetadataChanged(metadata: MediaMetadata?) = reselect()
@@ -67,17 +74,35 @@ class IslandListener : NotificationListenerService() {
     private fun refreshSessions() =
         setSessions(runCatching { msm.getActiveSessions(cn) }.getOrNull())
 
+    private fun startWatchingSessions() {
+        if (watchingSessions || !::msm.isInitialized) return
+        runCatching { msm.addOnActiveSessionsChangedListener(sessionsListener, cn) }
+            .onSuccess { watchingSessions = true }
+        refreshSessions()
+    }
+
+    private fun stopWatchingSessions() {
+        if (watchingSessions && ::msm.isInitialized) {
+            runCatching { msm.removeOnActiveSessionsChangedListener(sessionsListener) }
+        }
+        watchingSessions = false
+        setSessions(null)
+        clearArtwork()
+    }
+
     private fun setSessions(list: List<MediaController>?) {
-        sessions.forEach { it.unregisterCallback(callback) }
+        sessions.forEach { runCatching { it.unregisterCallback(callback) } }
         sessions = list.orEmpty()
-        sessions.forEach { it.registerCallback(callback) }
+        sessions.forEach { runCatching { it.registerCallback(callback) } }
         reselect()
     }
 
     /** Playing session first, apps in the blocked list never. */
     private fun reselect() {
-        val ok = sessions.filter { it.packageName !in IslandSettings.blockedApps.value }
-        val best = ok.firstOrNull { it.playbackState.live() } ?: ok.firstOrNull()
+        val blocked = IslandSettings.blockedApps.value
+        val best = sessions.firstOrNull {
+            it.packageName !in blocked && it.playbackState.live()
+        } ?: sessions.firstOrNull { it.packageName !in blocked }
         if (best !== controller) {
             controller = best
             IslandController.media = best
@@ -92,41 +117,36 @@ class IslandListener : NotificationListenerService() {
     }
 
     override fun onListenerConnected() {
-        // A call that is already ringing when the listener (re)connects
-        runCatching { activeNotifications?.firstOrNull { isCall(it) }?.let { handleCall(it) } }
-        // Navigation / delivery already running when the listener (re)connects
-        runCatching {
-            activeNotifications
-                ?.firstOrNull { liveKind(it) != null && it.packageName !in IslandSettings.blockedApps.value }
-                ?.let { handleLive(it) }
-        }
-        // Clock app ka timer jo already chal raha ho
-        runCatching {
-            activeNotifications
-                ?.filter { it.packageName !in IslandSettings.blockedApps.value }
-                ?.forEach { handleClockTimer(it) }
-        }
-        // Download jo already chal raha ho
-        runCatching {
-            activeNotifications
-                ?.filter { it.packageName !in IslandSettings.blockedApps.value && it.packageName != packageName }
-                ?.forEach { handleDownload(it) }
-        }
-        msm = getSystemService(MediaSessionManager::class.java)
-        runCatching { msm.addOnActiveSessionsChangedListener(sessionsListener, cn) }
-        refreshSessions()
-
-        // Settings take effect right away (triggers + blocked apps), not on the next media event
         settingsJob?.cancel()
+        stopWatchingSessions()
+        msm = getSystemService(MediaSessionManager::class.java)
+
+        // Settings take effect right away. Watching media sessions is stopped completely while
+        // Islandify is disabled, which releases controllers, callbacks and album artwork.
         settingsJob = scope.launch {
-            combine(IslandSettings.triggers, IslandSettings.blockedApps) { t, b -> t to b }
-                .drop(1)   // the current state was already applied above
+            combine(
+                IslandSettings.triggers,
+                IslandSettings.blockedApps,
+                IslandSettings.enabled,
+            ) { _, _, _ -> Unit }
+                .drop(1)   // the current state is applied just below
                 .collect { applySettings() }
         }
+        applySettings()
     }
 
     /** Re-evaluates everything that depends on triggers / blockedApps against what is active right now. */
     private fun applySettings() {
+        if (!IslandSettings.enabled.value) {
+            stopWatchingSessions()
+            shown.clear()
+            labelCache.evictAll()
+            textTimers.clear()
+            IslandController.clearRuntimeState()
+            return
+        }
+
+        startWatchingSessions()
         val blocked = IslandSettings.blockedApps.value
         val active = runCatching { activeNotifications?.toList() }.getOrNull().orEmpty()
 
@@ -165,14 +185,20 @@ class IslandListener : NotificationListenerService() {
 
     override fun onDestroy() {
         settingsJob?.cancel()
+        stopWatchingSessions()
+        shown.clear()
+        labelCache.evictAll()
+        textTimers.clear()
         scope.cancel()
         super.onDestroy()
     }
 
     override fun onListenerDisconnected() {
         settingsJob?.cancel()
-        if (::msm.isInitialized) runCatching { msm.removeOnActiveSessionsChangedListener(sessionsListener) }
-        setSessions(null)
+        stopWatchingSessions()
+        shown.clear()
+        labelCache.evictAll()
+        textTimers.clear()
         // Ask Android to bind us again (after reinstall / ROM killing the listener)
         runCatching { requestRebind(ComponentName(this, IslandListener::class.java)) }
     }
@@ -181,23 +207,31 @@ class IslandListener : NotificationListenerService() {
         val c = controller
         val md = c?.metadata
         val title = md?.getString(MediaMetadata.METADATA_KEY_TITLE)
-        if (c == null || md == null || title == null || !IslandSettings.isOn(Trigger.Media)) {
-            IslandController.setMedia(null); return
+        if (c == null || md == null || title == null ||
+            !IslandSettings.enabled.value || !IslandSettings.isOn(Trigger.Media)
+        ) {
+            clearArtwork()
+            IslandController.setMedia(null)
+            return
         }
+        val safeTitle = title.bounded(MAX_TITLE_CHARS)
         val artist = md.getString(MediaMetadata.METADATA_KEY_ARTIST).orEmpty()
-        val art = md.getBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART)
+            .bounded(MAX_TITLE_CHARS)
+        val source = md.getBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART)
             ?: md.getBitmap(MediaMetadata.METADATA_KEY_ART)
-        if (art !== lastArt) {
-            lastArt = art
-            lastAccent = art?.let { dominantColor(it) }
+        if (source !== artSource?.get() || (source != null && displayArt == null)) {
+            artSource = source?.let { WeakReference(it) }
+            displayArt = source?.fitForIsland()
+            displayArt?.prepareToDraw()
+            lastAccent = displayArt?.let { dominantColor(it) }
         }
         val ps = c.playbackState
         IslandController.setMedia(
             IslandMode.Media(
-                title = title,
+                title = safeTitle,
                 artist = artist,
                 playing = ps.live(),
-                art = art,
+                art = displayArt,
                 accent = lastAccent,
                 durationMs = md.getLong(MediaMetadata.METADATA_KEY_DURATION).coerceAtLeast(0),
                 positionMs = (ps?.position ?: 0L).coerceAtLeast(0),
@@ -207,7 +241,23 @@ class IslandListener : NotificationListenerService() {
         )
     }
 
-    private val labelCache = HashMap<String, String>()
+    private fun Bitmap.fitForIsland(): Bitmap {
+        val largest = max(width, height)
+        if (largest <= MAX_ART_EDGE_PX) return this
+        val factor = MAX_ART_EDGE_PX.toFloat() / largest.toFloat()
+        val outW = (width * factor).roundToInt().coerceAtLeast(1)
+        val outH = (height * factor).roundToInt().coerceAtLeast(1)
+        return Bitmap.createScaledBitmap(this, outW, outH, true)
+    }
+
+    private fun clearArtwork() {
+        artSource?.clear()
+        artSource = null
+        displayArt = null
+        lastAccent = null
+    }
+
+    private val labelCache = android.util.LruCache<String, String>(128)
 
     /**
      * App name for a notification.
@@ -216,7 +266,7 @@ class IslandListener : NotificationListenerService() {
      */
     @Suppress("DEPRECATION")
     private fun appLabel(sbn: StatusBarNotification): String {
-        labelCache[sbn.packageName]?.let { return it }
+        labelCache.get(sbn.packageName)?.let { return it }
         val pm = packageManager
         val label = runCatching {
             pm.getApplicationLabel(pm.getApplicationInfo(sbn.packageName, 0)).toString()
@@ -226,8 +276,9 @@ class IslandListener : NotificationListenerService() {
                     ?.loadLabel(pm)?.toString()
             }.getOrNull()
         if (label.isNullOrBlank()) return sbn.packageName
-        labelCache[sbn.packageName] = label
-        return label
+        val compact = label.bounded(MAX_APP_LABEL_CHARS)
+        labelCache.put(sbn.packageName, compact)
+        return compact
     }
 
     /** If EXTRA_TEXT is empty, use the last chat message (MessagingStyle) or the big text. */
@@ -243,8 +294,12 @@ class IslandListener : NotificationListenerService() {
         return ex.getCharSequence(Notification.EXTRA_BIG_TEXT)?.toString().orEmpty()
     }
 
+    /** The UI shows only a few lines; do not retain arbitrarily large notification payloads. */
+    private fun String.bounded(maxChars: Int): String =
+        if (length <= maxChars) this else take(maxChars).trimEnd() + "…"
+
     override fun onNotificationPosted(sbn: StatusBarNotification) {
-        if (sbn.packageName == packageName) return
+        if (sbn.packageName == packageName || !IslandSettings.enabled.value) return
         val n = sbn.notification
 
         // Calls first: even if the dialer is in the blocked list, a call must show
@@ -289,15 +344,20 @@ class IslandListener : NotificationListenerService() {
         }
 
         val title = n.extras.getCharSequence(Notification.EXTRA_TITLE)?.toString().orEmpty()
-        val text = bodyOf(n)
+            .bounded(MAX_TITLE_CHARS)
+        val text = bodyOf(n).bounded(MAX_BODY_CHARS)
         if (title.isBlank() && text.isBlank()) return
 
         // Ongoing notifications must not pop up on every update: only the first time
         if (ongoing && shown.containsKey(sbn.key)) return
 
-        // The same notification posted again (count update etc.): do not show it twice
-        val sig = "$title|$text|${n.`when`}".hashCode()
+        // The same notification posted again (count update etc.): do not show it twice.
+        // Combine hashes directly instead of allocating another title+body string.
+        val sig = 31 * (31 * title.hashCode() + text.hashCode()) + n.`when`.hashCode()
         if (shown[sbn.key] == sig) return
+        if (sbn.key !in shown && shown.size >= MAX_SHOWN_KEYS) {
+            shown.entries.iterator().let { if (it.hasNext()) { it.next(); it.remove() } }
+        }
         shown[sbn.key] = sig
 
         val app = appLabel(sbn)
@@ -308,8 +368,8 @@ class IslandListener : NotificationListenerService() {
         val hide = locked && n.visibility != Notification.VISIBILITY_PUBLIC
 
         // Inline reply (RemoteInput) and "Mark as read" actions, e.g. Messages / WhatsApp / Telegram
-        val acts: List<Notification.Action> =
-            if (hide) emptyList() else n.actions.orEmpty().toList()
+        val acts: Array<Notification.Action> =
+            if (hide) emptyArray() else n.actions.orEmpty()
         val reply = acts.firstOrNull { a -> a.remoteInputs?.any { it.allowFreeFormInput } == true }
         val markRead = acts.firstOrNull { a ->
             val t = a.title?.toString()?.lowercase().orEmpty()
@@ -341,6 +401,11 @@ class IslandListener : NotificationListenerService() {
     }
 
     override fun onNotificationRemoved(sbn: StatusBarNotification) {
+        if (!IslandSettings.enabled.value) {
+            textTimers.remove(sbn.key)
+            shown.remove(sbn.key)
+            return
+        }
         if (isCall(sbn)) IslandController.clearCall(sbn.key)
         IslandController.clearLive(sbn.key)
         IslandController.clearClockTimer(sbn.key)
@@ -477,6 +542,7 @@ class IslandListener : NotificationListenerService() {
 
         val ex = sbn.notification.extras
         val title = ex.getCharSequence(Notification.EXTRA_TITLE)?.toString().orEmpty()
+            .bounded(MAX_TITLE_CHARS)
         val text = listOf(
             ex.getCharSequence(Notification.EXTRA_TEXT),
             ex.getCharSequence(Notification.EXTRA_SUB_TEXT),
@@ -484,6 +550,7 @@ class IslandListener : NotificationListenerService() {
         ).mapNotNull { it?.toString()?.trim()?.takeIf { s -> s.isNotEmpty() } }
             .distinct()
             .joinToString(", ")
+            .bounded(MAX_BODY_CHARS)
         if (title.isBlank() && text.isBlank()) return true
 
         val app = appLabel(sbn)
@@ -523,7 +590,8 @@ class IslandListener : NotificationListenerService() {
         } else -1
 
         val title = ex.getCharSequence(Notification.EXTRA_TITLE)?.toString().orEmpty()
-        val body = bodyOf(n)
+            .bounded(MAX_TITLE_CHARS)
+        val body = bodyOf(n).bounded(MAX_BODY_CHARS)
         val text = body.ifBlank { if (percent >= 0) "$percent%" else "" }
         val app = appLabel(sbn)
         if (title.isBlank() && text.isBlank()) return true
@@ -541,17 +609,19 @@ class IslandListener : NotificationListenerService() {
         if (!IslandSettings.isOn(Trigger.Calls)) return
         val n = sbn.notification
         val ex = n.extras
-        val name = ex.getCharSequence(Notification.EXTRA_TITLE)?.toString().orEmpty().ifBlank { "Call" }
+        val name = ex.getCharSequence(Notification.EXTRA_TITLE)?.toString().orEmpty()
+            .ifBlank { "Call" }
+            .bounded(MAX_TITLE_CHARS)
 
-        val actions = n.actions?.toList().orEmpty()
-        fun find(vararg words: String) = actions.firstOrNull { a ->
-            titleHasWord(a.title, words.toSet())
-        }?.actionIntent
+        val actions = n.actions.orEmpty()
+        fun find(vararg words: String) = words.toSet().let { wanted ->
+            actions.firstOrNull { a -> titleHasWord(a.title, wanted) }?.actionIntent
+        }
 
         // No guessing by position: if the title does not match, the button is hidden instead
         val answer = find("answer", "accept", "pick")
         val decline = find("decline", "reject", "hang", "end", "cut", "disconnect", "dismiss")
-            ?: if (answer != null) actions.map { it.actionIntent }.firstOrNull { it != answer } else null
+            ?: if (answer != null) actions.firstOrNull { it.actionIntent != answer }?.actionIntent else null
 
         // "android.callType": 1 = incoming, 2 = ongoing / outgoing, 3 = screening (API 31+ CallStyle)
         val type = ex.getInt("android.callType", 0)
@@ -568,6 +638,11 @@ class IslandListener : NotificationListenerService() {
     }
 
     private companion object {
+        const val MAX_ART_EDGE_PX = 256
+        const val MAX_APP_LABEL_CHARS = 80
+        const val MAX_TITLE_CHARS = 160
+        const val MAX_BODY_CHARS = 600
+        const val MAX_SHOWN_KEYS = 256
         val NON_LETTER = Regex("""\P{L}+""")
         val CALL_ACTION_WORDS = setOf("answer", "accept", "decline", "reject", "hang", "hangup", "end")
         // Only real Clock apps. A name check like contains("clock") also matched any unrelated app.

@@ -28,15 +28,7 @@ import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.remember
-import androidx.compose.ui.Modifier
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.size
-import androidx.compose.runtime.withFrameNanos
-import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.unit.dp
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -52,6 +44,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 
@@ -251,23 +244,12 @@ class IslandOverlay(
                     // It grows out of the top when an activity starts and shrinks away when it ends.
                     val last = remember { LastMode() }
                     if (mode !is IslandMode.Idle) last.value = mode
-
-                    // PRE-WARM: draw the island once, invisible and tiny, right after the window is added.
-                    // The first real composition (icons, theme, springs) is what made the first call /
-                    // notification lag. After 2 frames everything is already cached.
-                    var warm by remember { mutableStateOf(false) }
-                    if (!warm) {
-                        LaunchedEffect(Unit) {
-                            withFrameNanos { }
-                            withFrameNanos { }
-                            warm = true
-                        }
-                        Box(Modifier.size(1.dp).alpha(0f)) {
-                            DynamicIslandUi(
-                                mode = IslandMode.Call("", true, 0L),
-                                level = IslandLevel.Expanded,
-                                onClick = {},
-                            )
+                    // Keep the old mode only for the short exit animation. Album art can be several
+                    // megabytes, so retaining the last Media mode forever wastes RAM while idle.
+                    LaunchedEffect(mode) {
+                        if (mode is IslandMode.Idle) {
+                            delay(250)
+                            last.value = IslandMode.Idle
                         }
                     }
 
@@ -328,6 +310,8 @@ class IslandOverlay(
         val added = runCatching { wm.addView(v, lp) }
         if (added.isFailure) {
             // e.g. overlay permission revoked. Leave everything clean so show() can be retried.
+            // A ComposeView that never attached does not run its normal detach disposal strategy.
+            v.disposeComposition()
             s.cancel()
             o.destroy()
             return
@@ -377,12 +361,15 @@ class IslandOverlay(
 
     fun hide() {
         val v = view ?: return
+        // Clear our strong references first so callbacks racing with teardown become no-ops.
+        view = null
+        params = null
         unregisterReceivers()
         scope?.cancel()
         scope = null
         runCatching { wm.removeView(v) }
-        view = null
-        params = null
+        // Dispose explicitly as well: removeView can fail when a permission/host disappears.
+        runCatching { v.disposeComposition() }
         owner?.destroy()
         owner = null
     }
@@ -445,6 +432,7 @@ class IslandOverlay(
         runCatching { host.unregisterReceiver(batteryReceiver) }
         runCatching { host.unregisterReceiver(soundReceiver) }
         runCatching { host.getSystemService(CameraManager::class.java).unregisterTorchCallback(torchCallback) }
+        torchStates.clear()
     }
 }
 

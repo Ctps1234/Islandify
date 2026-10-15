@@ -61,9 +61,26 @@ import kotlinx.coroutines.withContext
 /** [system] = system app without a launcher icon: hidden unless "System apps" is switched on. */
 private data class AppItem(val pkg: String, val label: String, val system: Boolean = false)
 
-// Shown instantly when the tab opens; it is re-checked on every open / resume / install / uninstall
+// Shown instantly when the tab opens; it is re-checked on every open / resume / install / uninstall.
+// App icons are the largest objects on this screen. Bound the cache by bytes (not item count):
+// the old 160-entry cache could retain about 6 MiB after leaving the Apps tab.
 private var appsCache: List<AppItem>? = null
-private val iconCache = android.util.LruCache<String, ImageBitmap>(160)
+private const val ICON_CACHE_KIB = 1024
+private val iconCacheHolder = lazy {
+    object : android.util.LruCache<String, ImageBitmap>(ICON_CACHE_KIB) {
+        override fun sizeOf(key: String, value: ImageBitmap): Int =
+            ((value.width.toLong() * value.height.toLong() * 4L) / 1024L)
+                .coerceAtLeast(1L)
+                .coerceAtMost(Int.MAX_VALUE.toLong())
+                .toInt()
+    }
+}
+private val iconCache get() = iconCacheHolder.value
+
+/** Releases decoded icons as soon as the settings UI is no longer visible. */
+internal fun clearAppIconCache() {
+    if (iconCacheHolder.isInitialized()) iconCacheHolder.value.evictAll()
+}
 
 private tailrec fun Context.findLifecycleOwner(): LifecycleOwner? = when (this) {
     is LifecycleOwner -> this
@@ -101,6 +118,7 @@ private fun scanApps(ctx: Context, prev: List<AppItem>?, blocked: Set<String>): 
 @Composable
 fun AppsScreen() {
     val ctx = LocalContext.current
+    val appCtx = remember(ctx) { ctx.applicationContext }
     val blocked by IslandSettings.blockedApps.collectAsState()
     var apps by remember { mutableStateOf<List<AppItem>?>(appsCache) }
     var query by rememberSaveable { mutableStateOf("") }     // survive tab switches
@@ -121,19 +139,20 @@ fun AppsScreen() {
             addAction(Intent.ACTION_PACKAGE_REPLACED)
             addDataScheme("package")
         }
-        ContextCompat.registerReceiver(ctx, receiver, filter, ContextCompat.RECEIVER_NOT_EXPORTED)
+        ContextCompat.registerReceiver(appCtx, receiver, filter, ContextCompat.RECEIVER_NOT_EXPORTED)
         val owner = ctx.findLifecycleOwner()
         val observer = LifecycleEventObserver { _, e -> if (e == Lifecycle.Event.ON_RESUME) refreshTick++ }
         owner?.lifecycle?.addObserver(observer)
         onDispose {
-            runCatching { ctx.unregisterReceiver(receiver) }
+            runCatching { appCtx.unregisterReceiver(receiver) }
             owner?.lifecycle?.removeObserver(observer)
+            clearAppIconCache()
         }
     }
 
     LaunchedEffect(refreshTick) {
         val fresh = withContext(Dispatchers.Default) {
-            scanApps(ctx, appsCache, IslandSettings.blockedApps.value)
+            scanApps(appCtx, appsCache, IslandSettings.blockedApps.value)
         }
         appsCache = fresh
         if (fresh != apps) apps = fresh   // same list = no redraw
@@ -239,11 +258,13 @@ fun AppsScreen() {
 
 @Composable
 private fun AppIcon(pkg: String) {
-    val ctx = LocalContext.current
+    val appCtx = LocalContext.current.applicationContext
     val bmp by produceState<ImageBitmap?>(initialValue = iconCache.get(pkg), pkg) {
         if (value == null) {
             value = withContext(Dispatchers.IO) {
-                runCatching { ctx.packageManager.getApplicationIcon(pkg).toBitmap(96, 96).asImageBitmap() }.getOrNull()
+                runCatching {
+                    appCtx.packageManager.getApplicationIcon(pkg).toBitmap(96, 96).asImageBitmap()
+                }.getOrNull()
             }?.also { iconCache.put(pkg, it) }
         }
     }

@@ -29,6 +29,9 @@ class IslandA11yService : AccessibilityService() {
 
     override fun onServiceConnected() {
         super.onServiceConnected()
+        // Some ROMs reconnect the same service instance after a configuration change.
+        // Tear down the previous composition/collectors before creating replacements.
+        teardown()
         IslandSettings.init(this)
         IslandController.attach(this)
 

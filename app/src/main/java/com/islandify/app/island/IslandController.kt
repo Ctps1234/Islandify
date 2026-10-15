@@ -79,6 +79,9 @@ object IslandController {
     /** Notifications waiting behind the banner that is on screen (oldest is dropped when full). */
     private const val MAX_QUEUE = 5
 
+    /** Defensive cap for apps that publish a large number of simultaneous progress notifications. */
+    private const val MAX_DOWNLOADS = 32
+
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
     private val _mode = MutableStateFlow<IslandMode>(IslandMode.Idle)
@@ -161,6 +164,60 @@ object IslandController {
     // Music that has been paused for a while is not an "activity": the island hides until it plays again
     private var pauseJob: Job? = null
     private var pausedHide = false
+
+    private fun clearFlashReferences() {
+        curFlash = null
+        flashOpen = null
+        flashPkg = null
+        flashReply = null
+        flashMarkRead = null
+    }
+
+    /**
+     * Drops every runtime object when Islandify is switched off. In particular this releases
+     * MediaController/PendingIntent references and album-art bitmaps from the long-lived process.
+     */
+    fun clearRuntimeState() {
+        flashJob?.cancel()
+        flashJob = null
+        pauseJob?.cancel()
+        pauseJob = null
+        timerJob?.cancel()
+        timerJob = null
+        collapseJob?.cancel()
+        collapseJob = null
+
+        media = null
+        mediaMode = null
+        timerMode = null
+        callMode = null
+        callKey = null
+        callAnswer = null
+        callDecline = null
+        liveMode = null
+        liveKey = null
+        liveOpen = null
+        livePkg = null
+        downloads.clear()
+        dlMode = null
+
+        extKey = null
+        extEnd = 0L
+        extTotal = 0
+        extBeat = 0L
+        extNeedsBeat = false
+        hidden = false
+        pausedHide = false
+        stickyFlag = false
+        flashQueue.clear()
+        clearFlashReferences()
+
+        _replying.value = false
+        _queued.value = 0
+        _secondary.value = null
+        _level.value = IslandLevel.Compact
+        _mode.value = IslandMode.Idle
+    }
 
     private fun base(): IslandMode {
         callMode?.let { return it }
@@ -370,6 +427,8 @@ object IslandController {
         _replying.value = false
         if (stickyHeld) curFlash?.let { parkSticky(it) }   // keep the sticky pill (before cancel)
         flashJob?.cancel()
+        flashJob = null
+        clearFlashReferences()
         flashQueue.removeAll { !it.seen }                   // drop only unseen pop-ups, keep sticky ones
         _queued.value = 0
         _mode.value = c
@@ -536,7 +595,7 @@ object IslandController {
         val next = flashQueue.removeFirstOrNull()
         _queued.value = flashQueue.size
         if (next != null) startFlash(next) else {
-            curFlash = null
+            clearFlashReferences()
             _mode.value = base()
         }
     }
@@ -755,6 +814,7 @@ object IslandController {
     fun setDownload(m: IslandMode.Live, key: String, open: PendingIntent?, pkg: String?) {
         val old = downloads[key]
         if (old != null && old.mode == m) return          // nothing changed
+        if (old == null && downloads.size >= MAX_DOWNLOADS) return
         if (old == null) hidden = false                   // a new download shows again after a swipe-up
         downloads[key] = Dl(m, open, pkg)                 // replacing keeps the order
         syncDownload()

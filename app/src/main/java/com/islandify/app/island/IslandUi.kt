@@ -1260,9 +1260,11 @@ private fun RoundIcon(
 private fun Art(m: IslandMode.Media, size: Dp, radius: Dp) {
     val s = MaterialTheme.colorScheme
     val shape = RoundedCornerShape(radius)
-    if (m.art != null) {
+    val art = m.art
+    val image = remember(art) { art?.asImageBitmap() }
+    if (image != null) {
         Image(
-            bitmap = m.art.asImageBitmap(),
+            bitmap = image,
             contentDescription = null,
             contentScale = ContentScale.Crop,
             modifier = Modifier.size(size).clip(shape)

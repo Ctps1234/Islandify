@@ -104,6 +104,7 @@ object IslandControl {
     fun stop(c: Context) {
         IslandSettings.enabled.value = false
         IslandSettings.save()
+        IslandController.clearRuntimeState()
         c.stopService(Intent(c, IslandService::class.java))
     }
 }

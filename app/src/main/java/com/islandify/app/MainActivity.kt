@@ -1,4 +1,5 @@
 package com.islandify.app
+import android.content.ComponentCallbacks2
 import android.content.Context
 import com.islandify.app.core.AppLanguage
 import com.islandify.app.R
@@ -63,6 +64,7 @@ import com.islandify.app.ui.screens.ActivitiesScreen
 import com.islandify.app.ui.screens.AppsScreen
 import com.islandify.app.ui.screens.CustomizeScreen
 import com.islandify.app.ui.screens.HomeScreen
+import com.islandify.app.ui.screens.clearAppIconCache
 import com.islandify.app.ui.theme.AppTheme
 
 class MainActivity : ComponentActivity() {
@@ -84,6 +86,18 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         tick++
+    }
+
+    override fun onStop() {
+        // The foreground island can keep this process alive after the settings UI is closed.
+        // Do not let decoded app icons stay in that long-lived process.
+        clearAppIconCache()
+        super.onStop()
+    }
+
+    override fun onTrimMemory(level: Int) {
+        super.onTrimMemory(level)
+        if (level >= ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW) clearAppIconCache()
     }
 }
 
