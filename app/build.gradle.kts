@@ -23,8 +23,8 @@ android {
         applicationId = "com.islandify.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = ciVersionCode ?: 3
-        versionName = "1.3"
+        versionCode = ciVersionCode ?: 4
+        versionName = "1.4"
     }
 
     buildFeatures { compose = true }

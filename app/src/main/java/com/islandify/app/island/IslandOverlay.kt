@@ -79,8 +79,34 @@ class IslandOverlay(
     private var fullscreenProbe: View? = null
     private var receiversOn = false
     private val otherAppFullscreen = MutableStateFlow(false)
+    private val mainHandler = Handler(Looper.getMainLooper())
+    private var sawVisibleStatusBar = false
+    private var fullscreenCandidate = false
+    private var fullscreenConfirmation: Runnable? = null
 
     val shown: Boolean get() = view != null
+
+    /** Debounce system-bar animations and never hide before one reliable visible-bar reading. */
+    private fun updateFullscreenCandidate(hidden: Boolean) {
+        fullscreenCandidate = hidden
+        fullscreenConfirmation?.let(mainHandler::removeCallbacks)
+        fullscreenConfirmation = null
+        if (!hidden) {
+            sawVisibleStatusBar = true
+            otherAppFullscreen.value = false
+            return
+        }
+        if (!sawVisibleStatusBar) {
+            // Starting an overlay must never make the island disappear on an unknown reading.
+            otherAppFullscreen.value = false
+            return
+        }
+        val confirm = Runnable {
+            if (fullscreenCandidate) otherAppFullscreen.value = true
+        }
+        fullscreenConfirmation = confirm
+        mainHandler.postDelayed(confirm, 350L)
+    }
 
     /**
      * The island window deliberately draws through the status-bar/cutout area. Its own insets can
@@ -94,7 +120,18 @@ class IslandOverlay(
             alpha = 0f
             setOnApplyWindowInsetsListener { root, insets ->
                 val hidden = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                    !insets.isVisible(WindowInsets.Type.statusBars())
+                    // Insets delivered to an accessibility overlay can claim that status bars are
+                    // hidden even on the home screen. Cross-check the service metrics and the
+                    // position of this normally laid-out probe; any visible signal keeps the island.
+                    val probeVisible = insets.isVisible(WindowInsets.Type.statusBars())
+                    val metricsVisible = runCatching {
+                        wm.currentWindowMetrics.windowInsets
+                            .isVisible(WindowInsets.Type.statusBars())
+                    }.getOrDefault(true)
+                    val location = IntArray(2)
+                    root.getLocationOnScreen(location)
+                    val geometryVisible = location[1] > 0
+                    !(probeVisible || metricsVisible || geometryVisible)
                 } else {
                     @Suppress("DEPRECATION")
                     val currentTop = insets.systemWindowInsetTop
@@ -107,7 +144,7 @@ class IslandOverlay(
                     // hiding the island outside full screen.
                     fullscreenFlag || (stableTop > 0 && currentTop == 0)
                 }
-                otherAppFullscreen.value = hidden
+                updateFullscreenCandidate(hidden)
                 insets
             }
             addOnAttachStateChangeListener(object : View.OnAttachStateChangeListener {
@@ -126,8 +163,7 @@ class IslandOverlay(
             windowType,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
                 WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
-                WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
-                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+                WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
             PixelFormat.TRANSLUCENT,
         ).apply {
             gravity = Gravity.TOP or Gravity.LEFT
@@ -145,6 +181,10 @@ class IslandOverlay(
     private fun stopFullscreenProbe() {
         val probe = fullscreenProbe
         fullscreenProbe = null
+        fullscreenCandidate = false
+        sawVisibleStatusBar = false
+        fullscreenConfirmation?.let(mainHandler::removeCallbacks)
+        fullscreenConfirmation = null
         otherAppFullscreen.value = false
         if (probe != null) runCatching { wm.removeView(probe) }
     }

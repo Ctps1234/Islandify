@@ -54,6 +54,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
+import com.islandify.app.core.HeadsUpController
 import com.islandify.app.core.IslandControl
 import com.islandify.app.core.IslandSettings
 import com.islandify.app.core.Perms
@@ -85,6 +86,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
+        HeadsUpController.sync(this)
         tick++
     }
 

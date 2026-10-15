@@ -39,6 +39,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CustomizeScreen() {
+    val ctx = LocalContext.current
     val scale by IslandSettings.scale.collectAsState()
     val w by IslandSettings.widthScale.collectAsState()
     val h by IslandSettings.heightScale.collectAsState()
@@ -61,6 +62,7 @@ fun CustomizeScreen() {
     val swLeft by IslandSettings.swipeLeft.collectAsState()
     val swRight by IslandSettings.swipeRight.collectAsState()
     val stickyNotif by IslandSettings.stickyNotif.collectAsState()
+    val suppressSystemHeadsUp by IslandSettings.suppressSystemHeadsUp.collectAsState()
     val idlePill by IslandSettings.idlePill.collectAsState()
     val fullscreenBehavior by IslandSettings.fullscreenBehavior.collectAsState()
     val dynamicOk = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
@@ -228,6 +230,20 @@ fun CustomizeScreen() {
                 checked = stickyNotif, onChange = { IslandSettings.stickyNotif.value = it; IslandSettings.save() }
             )
             ToggleRow(
+                icon = Icons.Rounded.NotificationsOff,
+                title = stringResource(R.string.cust_suppress_heads_up),
+                subtitle = stringResource(R.string.cust_suppress_heads_up_sub),
+                checked = suppressSystemHeadsUp,
+                onChange = { enabled ->
+                    IslandSettings.suppressSystemHeadsUp.value = enabled
+                    IslandSettings.save()
+                    HeadsUpController.sync(ctx)
+                    if (enabled && !Perms.notificationPolicy(ctx)) {
+                        Perms.openNotificationPolicySettings(ctx)
+                    }
+                }
+            )
+            ToggleRow(
                 icon = Icons.Rounded.Palette, title = stringResource(R.string.cust_app_accent),
                 subtitle = stringResource(R.string.cust_app_accent_sub),
                 checked = appAccent, onChange = { IslandSettings.islandAppAccent.value = it; IslandSettings.save() }
@@ -351,7 +367,6 @@ fun CustomizeScreen() {
 
         /* ---------- Language ---------- */
         SectionCard(title = stringResource(R.string.lang_title), icon = Icons.Rounded.Language) {
-            val ctx = LocalContext.current
             var lang by remember { mutableStateOf(AppLanguage.saved(ctx)) }
             val options = listOf(
                 AppLanguage.SYSTEM to stringResource(R.string.theme_system),

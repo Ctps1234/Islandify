@@ -3,6 +3,7 @@ package com.islandify.app.core
 import com.islandify.app.island.*
 
 import android.Manifest
+import android.app.NotificationManager
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
@@ -23,6 +24,10 @@ object Perms {
 
     fun listener(c: Context) =
         NotificationManagerCompat.getEnabledListenerPackages(c).contains(c.packageName)
+
+    fun notificationPolicy(c: Context) = runCatching {
+        c.getSystemService(NotificationManager::class.java).isNotificationPolicyAccessGranted
+    }.getOrDefault(false)
 
     /**
      * Is the Islandify accessibility service switched on in Settings?
@@ -71,6 +76,11 @@ object Perms {
         Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
     )
 
+    fun openNotificationPolicySettings(c: Context) = go(
+        c,
+        Intent(Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    )
+
     fun openBatterySettings(c: Context) {
         val direct = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:${c.packageName}"))
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
@@ -94,6 +104,7 @@ object IslandControl {
     fun start(c: Context) {
         IslandSettings.enabled.value = true
         IslandSettings.save()
+        HeadsUpController.sync(c)
         when {
             Perms.accessibility(c) || Perms.overlay(c) ->
                 runCatching { ContextCompat.startForegroundService(c, Intent(c, IslandService::class.java)) }
@@ -104,6 +115,7 @@ object IslandControl {
     fun stop(c: Context) {
         IslandSettings.enabled.value = false
         IslandSettings.save()
+        HeadsUpController.sync(c)
         IslandController.clearRuntimeState()
         c.stopService(Intent(c, IslandService::class.java))
     }

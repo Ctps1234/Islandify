@@ -186,6 +186,9 @@
     <string name="cust_idle_pill_sub">Small pill stays on screen; tap it for time, date and battery</string>
     <string name="cust_sticky_notif">Keep notifications until dismissed</string>
     <string name="cust_sticky_notif_sub">A notification shrinks to the small pill after a few seconds and stays there until you tap it, swipe it up, reply or mark it as read</string>
+    <string name="cust_suppress_heads_up">Avoid duplicate system pop-up</string>
+    <string name="cust_suppress_heads_up_sub">Keeps notifications in the system shade with their sound and vibration, but blocks the duplicate visual pop-up. Android asks once for Do Not Disturb access.</string>
+    <string name="heads_up_mode_name">Islandify visual alerts</string>
     <string name="cust_swipe_skip">Swipe to skip tracks</string>
     <string name="cust_swipe_skip_sub">Swipe the island left for next, right for previous</string>
     <string name="cust_app_accent">Island uses app accent</string>

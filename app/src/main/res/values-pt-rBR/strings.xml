@@ -186,6 +186,9 @@
     <string name="cust_idle_pill_sub">A cápsula pequena permanece na tela; toque nela para ver hora, data e bateria</string>
     <string name="cust_sticky_notif">Manter notificações até serem dispensadas</string>
     <string name="cust_sticky_notif_sub">Após alguns segundos, uma notificação se reduz à cápsula pequena e permanece lá até você tocar nela, deslizá-la para cima, responder ou marcá-la como lida</string>
+    <string name="cust_suppress_heads_up">Evitar pop-up duplicado do sistema</string>
+    <string name="cust_suppress_heads_up_sub">Mantém as notificações na barra do sistema com som e vibração, mas bloqueia o pop-up visual duplicado. O Android solicita uma vez o acesso ao Não Perturbe.</string>
+    <string name="heads_up_mode_name">Alertas visuais do Islandify</string>
     <string name="cust_swipe_skip">Deslizar para trocar de faixa</string>
     <string name="cust_swipe_skip_sub">Deslize a ilha para a esquerda para avançar e para a direita para voltar</string>
     <string name="cust_app_accent">A ilha usa o destaque do app</string>

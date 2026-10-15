@@ -159,6 +159,7 @@ object IslandSettings {
     val fullscreenBehavior = MutableStateFlow(FullscreenBehavior.ShowAll)
     val swipeSkip = MutableStateFlow(true)                       // swipe left/right on the island to skip tracks
     val stickyNotif = MutableStateFlow(false)                    // notifications stay on the island until tapped / swiped away
+    val suppressSystemHeadsUp = MutableStateFlow(false)          // island banner replaces the normal system pop-up
     val swipeUp = MutableStateFlow(SwipeAction.Dismiss)
     val swipeDown = MutableStateFlow(SwipeAction.None)
     val swipeLeft = MutableStateFlow(SwipeAction.NextTrack)
@@ -218,6 +219,7 @@ object IslandSettings {
         fullscreenBehavior.value = FullscreenBehavior.from(p.getString("fullscreenBehavior", null))
         swipeSkip.value = p.getBoolean("swipeSkip", true)
         stickyNotif.value = p.getBoolean("stickyNotif", false)
+        suppressSystemHeadsUp.value = p.getBoolean("suppressSystemHeadsUp", false)
         swipeUp.value = SwipeAction.from(p.getString("swipeUp", null), SwipeAction.Dismiss)
         swipeDown.value = SwipeAction.from(p.getString("swipeDown", null), SwipeAction.None)
         swipeLeft.value = SwipeAction.from(p.getString("swipeLeft", null), SwipeAction.NextTrack)
@@ -257,6 +259,7 @@ object IslandSettings {
             ?.putString("fullscreenBehavior", fullscreenBehavior.value.key)
             ?.putBoolean("swipeSkip", swipeSkip.value)
             ?.putBoolean("stickyNotif", stickyNotif.value)
+            ?.putBoolean("suppressSystemHeadsUp", suppressSystemHeadsUp.value)
             ?.putString("swipeUp", swipeUp.value.key)
             ?.putString("swipeDown", swipeDown.value.key)
             ?.putString("swipeLeft", swipeLeft.value.key)
@@ -339,6 +342,7 @@ object IslandSettings {
         autoCollapseSec.value = 6
         swipeSkip.value = true
         stickyNotif.value = false
+        suppressSystemHeadsUp.value = false
         fullscreenBehavior.value = FullscreenBehavior.ShowAll
         swipeUp.value = SwipeAction.Dismiss
         swipeDown.value = SwipeAction.None
