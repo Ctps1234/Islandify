@@ -1,5 +1,6 @@
 package com.islandify.app.island
 
+import com.islandify.app.R
 import com.islandify.app.core.*
 
 import android.bluetooth.BluetoothClass
@@ -18,6 +19,8 @@ import android.os.BatteryManager
 import android.os.Build
 import android.view.Gravity
 import android.view.MotionEvent
+import android.view.View
+import android.view.WindowInsets
 import android.view.WindowManager
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.spring
@@ -28,15 +31,7 @@ import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.remember
-import androidx.compose.ui.Modifier
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.size
-import androidx.compose.runtime.withFrameNanos
-import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.unit.dp
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -52,7 +47,10 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.launch
 
 /**
@@ -78,9 +76,118 @@ class IslandOverlay(
     private var scope: CoroutineScope? = null
     private var view: ComposeView? = null
     private var params: WindowManager.LayoutParams? = null
+    private var fullscreenProbe: View? = null
     private var receiversOn = false
+    private val otherAppFullscreen = MutableStateFlow(false)
+    private val mainHandler = Handler(Looper.getMainLooper())
+    private var sawVisibleStatusBar = false
+    private var fullscreenCandidate = false
+    private var fullscreenConfirmation: Runnable? = null
 
     val shown: Boolean get() = view != null
+
+    /** Debounce system-bar animations and never hide before one reliable visible-bar reading. */
+    private fun updateFullscreenCandidate(hidden: Boolean) {
+        fullscreenCandidate = hidden
+        fullscreenConfirmation?.let(mainHandler::removeCallbacks)
+        fullscreenConfirmation = null
+        if (!hidden) {
+            sawVisibleStatusBar = true
+            otherAppFullscreen.value = false
+            return
+        }
+        if (!sawVisibleStatusBar) {
+            // Starting an overlay must never make the island disappear on an unknown reading.
+            otherAppFullscreen.value = false
+            return
+        }
+        val confirm = Runnable {
+            if (fullscreenCandidate) otherAppFullscreen.value = true
+        }
+        fullscreenConfirmation = confirm
+        mainHandler.postDelayed(confirm, 350L)
+    }
+
+    /**
+     * The island window deliberately draws through the status-bar/cutout area. Its own insets can
+     * therefore report a zero top inset even while the bar is visible. A separate transparent,
+     * non-touchable 1 px window omits FLAG_LAYOUT_NO_LIMITS and receives the real bar visibility.
+     * Insets/layout callbacks are event-driven: no screen contents, app lists or polling are used.
+     */
+    private fun startFullscreenProbe() {
+        if (fullscreenProbe != null) return
+        val probe = View(host).apply {
+            alpha = 0f
+            setOnApplyWindowInsetsListener { root, insets ->
+                val hidden = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                    // Insets delivered to an accessibility overlay can claim that status bars are
+                    // hidden even on the home screen. Cross-check the service metrics and the
+                    // position of this normally laid-out probe; any visible signal keeps the island.
+                    val probeVisible = insets.isVisible(WindowInsets.Type.statusBars())
+                    val metricsVisible = runCatching {
+                        wm.currentWindowMetrics.windowInsets
+                            .isVisible(WindowInsets.Type.statusBars())
+                    }.getOrDefault(true)
+                    val location = IntArray(2)
+                    root.getLocationOnScreen(location)
+                    val geometryVisible = location[1] > 0
+                    !(probeVisible || metricsVisible || geometryVisible)
+                } else {
+                    @Suppress("DEPRECATION")
+                    val currentTop = insets.systemWindowInsetTop
+                    @Suppress("DEPRECATION")
+                    val stableTop = insets.stableInsetTop
+                    @Suppress("DEPRECATION")
+                    val fullscreenFlag =
+                        root.systemUiVisibility and View.SYSTEM_UI_FLAG_FULLSCREEN != 0
+                    // If an OEM cannot provide a stable status-bar height, fail open rather than
+                    // hiding the island outside full screen.
+                    fullscreenFlag || (stableTop > 0 && currentTop == 0)
+                }
+                updateFullscreenCandidate(hidden)
+                insets
+            }
+            addOnAttachStateChangeListener(object : View.OnAttachStateChangeListener {
+                override fun onViewAttachedToWindow(view: View) = view.requestApplyInsets()
+                override fun onViewDetachedFromWindow(view: View) = Unit
+            })
+            @Suppress("DEPRECATION")
+            setOnSystemUiVisibilityChangeListener { requestApplyInsets() }
+            addOnLayoutChangeListener { root, _, _, _, _, _, _, _, _ ->
+                root.requestApplyInsets()
+            }
+        }
+        val probeParams = WindowManager.LayoutParams(
+            1,
+            1,
+            windowType,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
+                WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
+            PixelFormat.TRANSLUCENT,
+        ).apply {
+            gravity = Gravity.TOP or Gravity.LEFT
+            x = 0
+            y = 0
+        }
+        if (runCatching { wm.addView(probe, probeParams) }.isSuccess) {
+            fullscreenProbe = probe
+        } else {
+            // An unknown reading must never suppress the island.
+            otherAppFullscreen.value = false
+        }
+    }
+
+    private fun stopFullscreenProbe() {
+        val probe = fullscreenProbe
+        fullscreenProbe = null
+        fullscreenCandidate = false
+        sawVisibleStatusBar = false
+        fullscreenConfirmation?.let(mainHandler::removeCallbacks)
+        fullscreenConfirmation = null
+        otherAppFullscreen.value = false
+        if (probe != null) runCatching { wm.removeView(probe) }
+    }
 
     private val powerReceiver = object : BroadcastReceiver() {
         override fun onReceive(c: Context, i: Intent) {
@@ -181,7 +288,8 @@ class IslandOverlay(
                     val dev: BluetoothDevice? = if (Build.VERSION.SDK_INT >= 33)
                         i.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE, BluetoothDevice::class.java)
                     else @Suppress("DEPRECATION") i.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE)
-                    val name = runCatching { dev?.name }.getOrNull() ?: "Bluetooth device"
+                    val name = runCatching { dev?.name }.getOrNull()
+                        ?: AppLanguage.wrap(c).getString(R.string.island_bluetooth_device)
                     val headphones = runCatching {
                         dev?.bluetoothClass?.majorDeviceClass == BluetoothClass.Device.Major.AUDIO_VIDEO
                     }.getOrDefault(false)
@@ -189,7 +297,12 @@ class IslandOverlay(
                 }
                 Intent.ACTION_HEADSET_PLUG -> if (i.getIntExtra("state", 0) == 1) {
                     IslandController.flash(
-                        IslandMode.Device(i.getStringExtra("name") ?: "Wired headphones", true), 3000
+                        IslandMode.Device(
+                            i.getStringExtra("name")
+                                ?: AppLanguage.wrap(c).getString(R.string.island_wired_headphones),
+                            true
+                        ),
+                        3000
                     )
                 }
             }
@@ -227,7 +340,9 @@ class IslandOverlay(
             }
         }
 
-        val v = ComposeView(host).apply {
+        // Services keep the system locale even when the user picked a language inside the app.
+        // Build the overlay with the saved locale so its own labels are translated as well.
+        val v = ComposeView(AppLanguage.wrap(host)).apply {
             setViewTreeLifecycleOwner(o)
             setViewTreeSavedStateRegistryOwner(o)
             setViewTreeViewModelStoreOwner(o)
@@ -247,33 +362,31 @@ class IslandOverlay(
                     val queued by IslandController.queued.collectAsState()
                     val secondary by IslandController.secondary.collectAsState()
                     val idlePill by IslandSettings.idlePill.collectAsState()
+                    val fullscreen by otherAppFullscreen.collectAsState()
+                    val fullscreenBehavior by IslandSettings.fullscreenBehavior.collectAsState()
+                    val allowedInFullscreen = !fullscreen || when (fullscreenBehavior) {
+                        FullscreenBehavior.ShowAll -> true
+                        FullscreenBehavior.HideIdle -> mode !is IslandMode.Idle
+                        FullscreenBehavior.AlertsOnly ->
+                            mode is IslandMode.Notification || mode is IslandMode.Call
+                    }
                     // Nothing happening -> the island is not on screen at all.
                     // It grows out of the top when an activity starts and shrinks away when it ends.
                     val last = remember { LastMode() }
                     if (mode !is IslandMode.Idle) last.value = mode
-
-                    // PRE-WARM: draw the island once, invisible and tiny, right after the window is added.
-                    // The first real composition (icons, theme, springs) is what made the first call /
-                    // notification lag. After 2 frames everything is already cached.
-                    var warm by remember { mutableStateOf(false) }
-                    if (!warm) {
-                        LaunchedEffect(Unit) {
-                            withFrameNanos { }
-                            withFrameNanos { }
-                            warm = true
-                        }
-                        Box(Modifier.size(1.dp).alpha(0f)) {
-                            DynamicIslandUi(
-                                mode = IslandMode.Call("", true, 0L),
-                                level = IslandLevel.Expanded,
-                                onClick = {},
-                            )
+                    // Keep the old mode only for the short exit animation. Album art can be several
+                    // megabytes, so retaining the last Media mode forever wastes RAM while idle.
+                    LaunchedEffect(mode) {
+                        if (mode is IslandMode.Idle) {
+                            delay(250)
+                            last.value = IslandMode.Idle
                         }
                     }
 
                     AnimatedVisibility(
-                        // Idle pill stays on screen so there is always something to tap (time / date / battery)
-                        visible = mode !is IslandMode.Idle || idlePill,
+                        // Full-screen suppression keeps alerts event-driven: a notification or call
+                        // appears immediately, then the underlying mode is hidden again when it ends.
+                        visible = allowedInFullscreen && (mode !is IslandMode.Idle || idlePill),
                         // Fast + snappy: no slow spring, appears almost instantly
                         enter = scaleIn(tween(140), 0.6f, TransformOrigin(0.5f, 0f)) + fadeIn(tween(90)),
                         exit = scaleOut(tween(160), 0.6f, TransformOrigin(0.5f, 0f)) + fadeOut(tween(140)),
@@ -320,14 +433,21 @@ class IslandOverlay(
             false
         }
 
-        // Whenever the window size changes (pill grows / shrinks), re-center it ourselves
-        v.addOnLayoutChangeListener { _, l, _, r, _, ol, _, or, _ ->
-            if (r - l != or - ol) v.post { applyPos() }
+        // Whenever the window size changes (pill grows / shrinks), re-center it ourselves.
+        v.addOnLayoutChangeListener { _, l, t, r, b, ol, ot, or, ob ->
+            if (r - l != or - ol || b - t != ob - ot) v.post { applyPos() }
+        }
+        // Insets change on rotation/fold state changes even if the pill keeps the same size.
+        v.setOnApplyWindowInsetsListener { _, insets ->
+            v.post { applyPos() }
+            insets
         }
 
         val added = runCatching { wm.addView(v, lp) }
         if (added.isFailure) {
             // e.g. overlay permission revoked. Leave everything clean so show() can be retried.
+            // A ComposeView that never attached does not run its normal detach disposal strategy.
+            v.disposeComposition()
             s.cancel()
             o.destroy()
             return
@@ -337,6 +457,7 @@ class IslandOverlay(
         scope = s
         params = lp
         view = v
+        startFullscreenProbe()
         registerReceivers()
 
         // Replying needs the keyboard: make the window focusable only while the user is typing
@@ -350,10 +471,26 @@ class IslandOverlay(
             }
         }
 
-        // Sliders in the app move the island live
+        // Sliders and camera alignment move the island live.
         s.launch {
-            combine(IslandSettings.offsetX, IslandSettings.offsetY) { x, y -> x to y }
-                .collect { applyPos() }
+            combine(
+                IslandSettings.offsetX,
+                IslandSettings.offsetY,
+                IslandSettings.autoAlignCamera,
+            ) { _, _, _ -> Unit }.collect { applyPos() }
+        }
+
+        // Rebuild the ComposeView when the in-app language changes; service contexts are otherwise
+        // unaffected by Activity.recreate(). The post survives cancellation of this overlay scope.
+        s.launch {
+            AppLanguage.changes.drop(1).collect {
+                v.post {
+                    if (view === v) {
+                        hide()
+                        show()
+                    }
+                }
+            }
         }
     }
 
@@ -361,13 +498,36 @@ class IslandOverlay(
         if (Build.VERSION.SDK_INT >= 30) wm.currentWindowMetrics.bounds.width()
         else host.resources.displayMetrics.widthPixels
 
-    /** Center the window horizontally (+ user offset) and apply the vertical offset. */
+    private fun screenH(): Int =
+        if (Build.VERSION.SDK_INT >= 30) wm.currentWindowMetrics.bounds.height()
+        else host.resources.displayMetrics.heightPixels
+
+    /** The top display cutout is normally the front camera/notch; ignore bottom/hinge cutouts. */
+    private fun cameraCutout(v: ComposeView): android.graphics.Rect? {
+        if (Build.VERSION.SDK_INT < 28) return null
+        val cutout = if (Build.VERSION.SDK_INT >= 30) {
+            wm.currentWindowMetrics.windowInsets.displayCutout
+        } else {
+            v.rootWindowInsets?.displayCutout
+        } ?: return null
+        val topThird = screenH() / 3
+        return cutout.boundingRects
+            .asSequence()
+            .filter { !it.isEmpty && it.centerY() <= topThird }
+            .minByOrNull { it.top }
+    }
+
+    /** Center on the front camera when available, then apply the user's fine-tuning offsets. */
     private fun applyPos() {
         val v = view ?: return
         val p = params ?: return
         if (v.width <= 0) return
-        val nx = (screenW() - v.width) / 2 + (IslandSettings.offsetX.value * density).toInt()
-        val ny = (IslandSettings.offsetY.value * density).toInt()
+        val auto = IslandSettings.autoAlignCamera.value
+        val cutout = if (auto) cameraCutout(v) else null
+        val baseCenterX = cutout?.centerX() ?: screenW() / 2
+        val baseY = cutout?.let { (it.centerY() - v.height / 2).coerceAtLeast(0) } ?: 0
+        val nx = baseCenterX - v.width / 2 + (IslandSettings.offsetX.value * density).toInt()
+        val ny = (if (auto) baseY else 0) + (IslandSettings.offsetY.value * density).toInt()
         if (p.x != nx || p.y != ny) {
             p.x = nx
             p.y = ny
@@ -377,12 +537,16 @@ class IslandOverlay(
 
     fun hide() {
         val v = view ?: return
+        // Clear our strong references first so callbacks racing with teardown become no-ops.
+        view = null
+        params = null
+        stopFullscreenProbe()
         unregisterReceivers()
         scope?.cancel()
         scope = null
         runCatching { wm.removeView(v) }
-        view = null
-        params = null
+        // Dispose explicitly as well: removeView can fail when a permission/host disappears.
+        runCatching { v.disposeComposition() }
         owner?.destroy()
         owner = null
     }
@@ -445,6 +609,7 @@ class IslandOverlay(
         runCatching { host.unregisterReceiver(batteryReceiver) }
         runCatching { host.unregisterReceiver(soundReceiver) }
         runCatching { host.getSystemService(CameraManager::class.java).unregisterTorchCallback(torchCallback) }
+        torchStates.clear()
     }
 }
 

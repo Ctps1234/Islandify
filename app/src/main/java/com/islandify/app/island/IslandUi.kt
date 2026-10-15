@@ -1,5 +1,6 @@
 package com.islandify.app.island
 
+import com.islandify.app.R
 import com.islandify.app.core.*
 import com.islandify.app.ui.components.*
 import com.islandify.app.ui.onboarding.*
@@ -58,6 +59,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -88,19 +90,21 @@ private fun IslandMode.Toggle.icon(): ImageVector = when (kind) {
     ToggleKind.Flashlight -> if (on) Icons.Rounded.FlashOn else Icons.Rounded.FlashOff
 }
 
-private fun IslandMode.Toggle.title(): String = when (kind) {
-    ToggleKind.Silent -> if (on) "Silent" else "Sound on"
-    ToggleKind.Vibrate -> "Vibrate"
-    ToggleKind.Dnd -> if (on) "Do Not Disturb" else "Do Not Disturb off"
-    ToggleKind.Flashlight -> if (on) "Flashlight on" else "Flashlight off"
-}
+@Composable
+private fun IslandMode.Toggle.title(): String = stringResource(when (kind) {
+    ToggleKind.Silent -> if (on) R.string.island_silent else R.string.island_sound_on
+    ToggleKind.Vibrate -> R.string.island_vibrate
+    ToggleKind.Dnd -> if (on) R.string.island_dnd else R.string.island_dnd_off
+    ToggleKind.Flashlight -> if (on) R.string.island_flashlight_on else R.string.island_flashlight_off
+})
 
-private fun IslandMode.Toggle.subtitle(): String = when (kind) {
-    ToggleKind.Silent -> if (on) "Ringer is off" else "Ringer is back on"
-    ToggleKind.Vibrate -> "Ringer vibrates only"
-    ToggleKind.Dnd -> if (on) "Calls and alerts are muted" else "Alerts are back"
-    ToggleKind.Flashlight -> if (on) "Torch is on" else "Torch is off"
-}
+@Composable
+private fun IslandMode.Toggle.subtitle(): String = stringResource(when (kind) {
+    ToggleKind.Silent -> if (on) R.string.island_ringer_off else R.string.island_ringer_back
+    ToggleKind.Vibrate -> R.string.island_ringer_vibrate
+    ToggleKind.Dnd -> if (on) R.string.island_calls_muted else R.string.island_alerts_back
+    ToggleKind.Flashlight -> if (on) R.string.island_torch_on else R.string.island_torch_off
+})
 
 private fun IslandMode.Toggle.tint(): Color = when (kind) {
     ToggleKind.Silent, ToggleKind.Vibrate -> if (on) Orange else Green
@@ -648,16 +652,16 @@ private fun Banner(m: IslandMode, queued: Int) {
                         if (m.connected) Icons.Rounded.Bolt else Icons.Rounded.BatteryStd, ts
                     )
                 },
-                title = if (m.connected) "Charging" else "Charger removed",
-                subtitle = if (m.connected) "Power connected" else "Unplugged",
+                title = stringResource(if (m.connected) R.string.island_charging else R.string.island_charger_removed),
+                subtitle = stringResource(if (m.connected) R.string.island_power_connected else R.string.island_unplugged),
                 trail = { Label("${m.percent}%", color = c, size = (14 * ts).roundToInt(), weight = FontWeight.Bold) },
                 ts = ts
             )
         }
         is IslandMode.LowBattery -> BannerRow(
             lead = { BannerRing(m.percent, Red, Icons.Rounded.BatteryAlert, ts) },
-            title = if (m.percent <= 10) "Battery very low" else "Battery low",
-            subtitle = "Plug in your charger",
+            title = stringResource(if (m.percent <= 10) R.string.island_battery_very_low else R.string.island_battery_low),
+            subtitle = stringResource(R.string.island_plug_charger),
             trail = { Label("${m.percent}%", color = Red, size = (14 * ts).roundToInt(), weight = FontWeight.Bold) },
             ts = ts
         )
@@ -678,7 +682,7 @@ private fun Banner(m: IslandMode, queued: Int) {
                     Color(0xFF0A84FF), Color(0xFF0A2540), ts
                 )
             },
-            title = "Connected",
+            title = stringResource(R.string.island_connected),
             subtitle = m.name,
             trail = { Icon(Icons.Rounded.CheckCircle, null, tint = Green, modifier = Modifier.size((17 * ts).dp)) },
             ts = ts
@@ -717,8 +721,14 @@ private fun Expanded(m: IslandMode, level: IslandLevel, a: IslandActions) {
             }
             Spacer(Modifier.width(20.dp))
             Column {
-                Label(if (m.connected) "Charging" else "Charger removed", size = 20, weight = FontWeight.SemiBold)
-                Label(if (m.connected) "Power connected" else "Unplugged", color = Muted, size = 14)
+                Label(
+                    stringResource(if (m.connected) R.string.island_charging else R.string.island_charger_removed),
+                    size = 20, weight = FontWeight.SemiBold
+                )
+                Label(
+                    stringResource(if (m.connected) R.string.island_power_connected else R.string.island_unplugged),
+                    color = Muted, size = 14
+                )
             }
             Spacer(Modifier.weight(1f))
             Icon(Icons.Rounded.Bolt, null, tint = Green, modifier = Modifier.size(30.dp))
@@ -759,8 +769,8 @@ private fun Expanded(m: IslandMode, level: IslandLevel, a: IslandActions) {
                         ReplyBar(a.onSendReply, a.onCancelReply)
                     } else {
                         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                            if (m.canMarkRead) PillButton("Mark as read", a.onMarkRead)
-                            if (m.canReply) PillButton("Reply", a.onReply)
+                            if (m.canMarkRead) PillButton(stringResource(R.string.island_mark_read), a.onMarkRead)
+                            if (m.canReply) PillButton(stringResource(R.string.island_reply), a.onReply)
                         }
                     }
                 }
@@ -777,7 +787,10 @@ private fun Expanded(m: IslandMode, level: IslandLevel, a: IslandActions) {
                     Art(m, if (large) 64.dp else 54.dp, if (large) 16.dp else 14.dp)
                     Spacer(Modifier.width(14.dp))
                     Column(Modifier.weight(1f)) {
-                        Label(m.title.ifBlank { "Unknown" }, size = if (large) 18 else 17, weight = FontWeight.SemiBold)
+                        Label(
+                            if (m.title.isBlank()) stringResource(R.string.island_unknown) else m.title,
+                            size = if (large) 18 else 17, weight = FontWeight.SemiBold
+                        )
                         Label(m.artist, color = Muted, size = 14, weight = FontWeight.Normal)
                     }
                     if (!large) {
@@ -824,7 +837,10 @@ private fun Expanded(m: IslandMode, level: IslandLevel, a: IslandActions) {
             Spacer(Modifier.width(20.dp))
             Column(Modifier.weight(1f)) {
                 Label(formatTime(m.remainingSec), color = Orange, size = 34, weight = FontWeight.Light, tabular = true)
-                Label(if (m.external) "Clock timer" else "Timer", color = Muted, size = 14, weight = FontWeight.Normal)
+                Label(
+                    stringResource(if (m.external) R.string.island_clock_timer else R.string.island_timer),
+                    color = Muted, size = 14, weight = FontWeight.Normal
+                )
             }
             // In-app timer: the button really stops it. Clock app timer: it only hides the island
             // (the timer keeps running in Clock), so it must not look like a stop button.
@@ -844,7 +860,10 @@ private fun Expanded(m: IslandMode, level: IslandLevel, a: IslandActions) {
             Column(Modifier.weight(1f)) {
                 Label(m.name, size = 18, weight = FontWeight.SemiBold)
                 if (m.incoming) {
-                    Label("Incoming call", color = Green, size = 14, weight = FontWeight.Normal)
+                    Label(
+                        stringResource(R.string.island_incoming_call),
+                        color = Green, size = 14, weight = FontWeight.Normal
+                    )
                 } else {
                     val sec = rememberElapsedSec(m.since)
                     Label(formatTime(sec), color = Green, size = 14, weight = FontWeight.Normal, tabular = true)
@@ -872,7 +891,7 @@ private fun Expanded(m: IslandMode, level: IslandLevel, a: IslandActions) {
             }
             Spacer(Modifier.width(18.dp))
             Column(Modifier.weight(1f)) {
-                Label("Connected", size = 20, weight = FontWeight.SemiBold)
+                Label(stringResource(R.string.island_connected), size = 20, weight = FontWeight.SemiBold)
                 Label(m.name, color = Muted, size = 14, weight = FontWeight.Normal)
             }
             Icon(Icons.Rounded.CheckCircle, null, tint = Green, modifier = Modifier.size(28.dp))
@@ -894,10 +913,13 @@ private fun Expanded(m: IslandMode, level: IslandLevel, a: IslandActions) {
             Spacer(Modifier.width(20.dp))
             Column(Modifier.weight(1f)) {
                 Label(
-                    if (m.percent <= 10) "Battery very low" else "Battery low",
+                    stringResource(if (m.percent <= 10) R.string.island_battery_very_low else R.string.island_battery_low),
                     size = 20, weight = FontWeight.SemiBold
                 )
-                Label("Plug in your charger", color = Muted, size = 14, weight = FontWeight.Normal)
+                Label(
+                    stringResource(R.string.island_plug_charger),
+                    color = Muted, size = 14, weight = FontWeight.Normal
+                )
             }
             Icon(Icons.Rounded.BatteryAlert, null, tint = Red, modifier = Modifier.size(30.dp))
         }
@@ -1016,7 +1038,10 @@ private fun MiniPlayer(m: IslandMode.Media, a: IslandActions) {
             Art(m, 34.dp, 9.dp)
             Spacer(Modifier.width(10.dp))
             Column(Modifier.weight(1f)) {
-                Label(m.title.ifBlank { "Unknown" }, size = 13, weight = FontWeight.SemiBold)
+                Label(
+                    if (m.title.isBlank()) stringResource(R.string.island_unknown) else m.title,
+                    size = 13, weight = FontWeight.SemiBold
+                )
                 Label(m.artist, color = Muted, size = 12, weight = FontWeight.Normal)
             }
         }
@@ -1071,7 +1096,9 @@ private fun ReplyBar(onSend: (String) -> Unit, onCancel: () -> Unit) {
                 .padding(horizontal = 14.dp),
             contentAlignment = Alignment.CenterStart
         ) {
-            if (text.isEmpty()) Label("Reply…", color = Muted, size = 14, weight = FontWeight.Normal)
+            if (text.isEmpty()) {
+                Label(stringResource(R.string.island_reply_hint), color = Muted, size = 14, weight = FontWeight.Normal)
+            }
             BasicTextField(
                 value = text,
                 onValueChange = { text = it },
@@ -1260,9 +1287,11 @@ private fun RoundIcon(
 private fun Art(m: IslandMode.Media, size: Dp, radius: Dp) {
     val s = MaterialTheme.colorScheme
     val shape = RoundedCornerShape(radius)
-    if (m.art != null) {
+    val art = m.art
+    val image = remember(art) { art?.asImageBitmap() }
+    if (image != null) {
         Image(
-            bitmap = m.art.asImageBitmap(),
+            bitmap = image,
             contentDescription = null,
             contentScale = ContentScale.Crop,
             modifier = Modifier.size(size).clip(shape)

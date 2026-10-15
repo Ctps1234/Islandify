@@ -11,6 +11,8 @@ import android.content.Intent
 import android.content.pm.PackageInfo
 import android.net.Uri
 import android.os.Build
+import android.os.Debug
+import android.text.format.Formatter
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -28,9 +30,12 @@ import androidx.compose.material.icons.automirrored.rounded.Send
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -40,6 +45,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.delay
 
 /** One gesture = one row. Add or remove items here and the screen updates by itself. */
 private data class Gesture(val icon: ImageVector, @StringRes val action: Int, @StringRes val result: Int)
@@ -61,6 +67,23 @@ private val AGGRESSIVE_BRANDS = listOf("xiaomi", "redmi", "poco", "oppo", "vivo"
 private fun buildNumber(info: PackageInfo): Long =
     if (Build.VERSION.SDK_INT >= 28) info.longVersionCode
     else @Suppress("DEPRECATION") info.versionCode.toLong()
+
+private data class DiagnosticSnapshot(
+    val processBytes: Long,
+    val heapUsedBytes: Long,
+    val heapMaxBytes: Long,
+    val iconCacheKib: Int,
+)
+
+private fun readDiagnostics(): DiagnosticSnapshot {
+    val runtime = Runtime.getRuntime()
+    return DiagnosticSnapshot(
+        processBytes = Debug.getPss().coerceAtLeast(0L) * 1024L,
+        heapUsedBytes = (runtime.totalMemory() - runtime.freeMemory()).coerceAtLeast(0L),
+        heapMaxBytes = runtime.maxMemory().coerceAtLeast(0L),
+        iconCacheKib = appIconCacheSizeKib(),
+    )
+}
 
 /**
  * About screen. Pass the same `tick` that Home gets: it changes every time the app
@@ -84,6 +107,14 @@ fun AboutScreen(tick: Int) {
 
     // Live status
     val running by IslandService.active.collectAsState(initial = IslandService.isActive())
+    val queued by IslandController.queued.collectAsState()
+    var diagnostics by remember { mutableStateOf(readDiagnostics()) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(5_000)
+            diagnostics = readDiagnostics()
+        }
+    }
     val statuses = remember(tick) {
         listOf(
             Status(Icons.Rounded.Accessibility, R.string.perm_accessibility, Perms.accessibility(ctx)) { Perms.openAccessibilitySettings(ctx) },
@@ -143,6 +174,47 @@ fun AboutScreen(tick: Int) {
                 style = MaterialTheme.typography.bodyMedium
             )
             statuses.forEach { s -> PermRow(s.icon, stringResource(s.title), s.ok, s.fix) }
+        }
+
+        SectionCard(title = stringResource(R.string.diag_title), icon = Icons.Rounded.MonitorHeart) {
+            Text(
+                stringResource(R.string.diag_description),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            DiagnosticRow(
+                stringResource(R.string.diag_ram),
+                Formatter.formatShortFileSize(ctx, diagnostics.processBytes)
+            )
+            DiagnosticRow(
+                stringResource(R.string.diag_heap),
+                stringResource(
+                    R.string.diag_heap_value,
+                    Formatter.formatShortFileSize(ctx, diagnostics.heapUsedBytes),
+                    Formatter.formatShortFileSize(ctx, diagnostics.heapMaxBytes),
+                )
+            )
+            DiagnosticRow(
+                stringResource(R.string.diag_icon_cache),
+                if (diagnostics.iconCacheKib == 0) stringResource(R.string.diag_cache_empty)
+                else Formatter.formatShortFileSize(ctx, diagnostics.iconCacheKib * 1024L)
+            )
+            DiagnosticRow(
+                stringResource(R.string.diag_queue),
+                stringResource(R.string.diag_queue_value, queued)
+            )
+            DiagnosticRow(
+                stringResource(R.string.diag_service),
+                stringResource(if (running) R.string.about_running else R.string.common_off)
+            )
+            FilledTonalButton(onClick = {
+                clearAppIconCache()
+                diagnostics = readDiagnostics()
+            }) {
+                Icon(Icons.Rounded.CleaningServices, null, Modifier.size(18.dp))
+                Spacer(Modifier.width(8.dp))
+                Text(stringResource(R.string.diag_clear_cache))
+            }
         }
 
         SectionCard(title = stringResource(R.string.about_gestures), icon = Icons.Rounded.TouchApp) {
@@ -231,6 +303,20 @@ private fun InfoRow(label: String, value: String) {
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
         Text(value, Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
+    }
+}
+
+@Composable
+private fun DiagnosticRow(label: String, value: String) {
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Text(
+            label,
+            Modifier.weight(1f),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(Modifier.width(16.dp))
+        Text(value, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
     }
 }
 

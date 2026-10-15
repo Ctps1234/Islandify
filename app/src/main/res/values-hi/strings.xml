@@ -186,6 +186,9 @@
     <string name="cust_idle_pill_sub">छोटी पिल स्क्रीन पर रहती है; समय, तारीख़ और बैटरी के लिए टैप करें</string>
     <string name="cust_sticky_notif">नोटिफिकेशन हटाने तक रुकें</string>
     <string name="cust_sticky_notif_sub">कुछ सेकंड बाद नोटिफिकेशन छोटी पिल में सिमट जाएगा और तब तक वहीं रहेगा जब तक आप उसे टैप, ऊपर स्वाइप, रिप्लाई या मार्क ऐज़ रीड न करें</string>
+    <string name="cust_suppress_heads_up">सिस्टम का डुप्लिकेट पॉप-अप रोकें</string>
+    <string name="cust_suppress_heads_up_sub">नोटिफिकेशन को सिस्टम शेड में उनकी आवाज़ और वाइब्रेशन के साथ रखता है, लेकिन डुप्लिकेट विज़ुअल पॉप-अप रोकता है। Android एक बार डू नॉट डिस्टर्ब एक्सेस माँगेगा।</string>
+    <string name="heads_up_mode_name">Islandify विज़ुअल अलर्ट</string>
     <string name="cust_swipe_skip">स्वाइप करके गाने बदलें</string>
     <string name="cust_swipe_skip_sub">अगले के लिए आइलैंड बाएँ, पिछले के लिए दाएँ स्वाइप करें</string>
     <string name="cust_app_accent">आइलैंड ऐप का एक्सेंट रंग इस्तेमाल करे</string>
@@ -230,4 +233,68 @@
     <string name="swipe_act_next">अगला गाना</string>
     <string name="swipe_act_prev">पिछला गाना</string>
     <string name="swipe_act_playpause">चलाएँ / रोकें</string>
+
+    <!-- कैमरा अलाइनमेंट -->
+    <string name="cust_auto_camera">फ्रंट कैमरे से अपने-आप अलाइन करें</string>
+    <string name="cust_auto_camera_sub">आइलैंड को ऊपर के कैमरा कटआउट पर बीच में रखता है। पोज़िशन कंट्रोल बारीक बदलाव करते हैं।</string>
+
+    <!-- फ़ुल-स्क्रीन व्यवहार -->
+    <string name="cust_fullscreen">जब दूसरा ऐप फ़ुल स्क्रीन में हो</string>
+    <string name="cust_fullscreen_sub">वीडियो, गेम या दूसरे इमर्सिव ऐप स्टेटस बार छिपाएँ तो क्या दिखे, यह चुनें। कॉल हमेशा अलर्ट मानी जाती हैं।</string>
+    <string name="fullscreen_show_all">हमेशा</string>
+    <string name="fullscreen_hide_idle">खाली पिल छिपाएँ</string>
+    <string name="fullscreen_alerts_only">केवल अलर्ट</string>
+
+    <!-- डायग्नोस्टिक्स -->
+    <string name="diag_title">डायग्नोस्टिक्स</string>
+    <string name="diag_description">Islandify प्रोसेस की लाइव जानकारी। मान हर 5 सेकंड में अपडेट होते हैं।</string>
+    <string name="diag_ram">प्रोसेस RAM</string>
+    <string name="diag_heap">Java हीप</string>
+    <string name="diag_icon_cache">ऐप आइकन कैश</string>
+    <string name="diag_queue">कतार में पॉप-अप</string>
+    <string name="diag_service">आइलैंड सर्विस</string>
+    <string name="diag_heap_value">%2$s में से %1$s उपयोग</string>
+    <string name="diag_queue_value">%1$d प्रतीक्षा में</string>
+    <string name="diag_clear_cache">आइकन कैश साफ़ करें</string>
+    <string name="diag_cache_empty">खाली</string>
+
+    <!-- आइलैंड के अंदर दिखने वाला टेक्स्ट -->
+    <string name="island_silent">साइलेंट</string>
+    <string name="island_sound_on">आवाज़ चालू</string>
+    <string name="island_vibrate">वाइब्रेट</string>
+    <string name="island_dnd">डू नॉट डिस्टर्ब</string>
+    <string name="island_dnd_off">डू नॉट डिस्टर्ब बंद</string>
+    <string name="island_flashlight_on">फ़्लैशलाइट चालू</string>
+    <string name="island_flashlight_off">फ़्लैशलाइट बंद</string>
+    <string name="island_ringer_off">रिंगर बंद है</string>
+    <string name="island_ringer_back">रिंगर फिर चालू है</string>
+    <string name="island_ringer_vibrate">रिंगर केवल वाइब्रेट करता है</string>
+    <string name="island_calls_muted">कॉल और अलर्ट म्यूट हैं</string>
+    <string name="island_alerts_back">अलर्ट फिर चालू हैं</string>
+    <string name="island_torch_on">टॉर्च चालू है</string>
+    <string name="island_torch_off">टॉर्च बंद है</string>
+    <string name="island_charging">चार्जिंग</string>
+    <string name="island_charger_removed">चार्जर हटाया गया</string>
+    <string name="island_power_connected">पावर कनेक्ट है</string>
+    <string name="island_unplugged">अनप्लग किया गया</string>
+    <string name="island_battery_very_low">बैटरी बहुत कम है</string>
+    <string name="island_battery_low">बैटरी कम है</string>
+    <string name="island_plug_charger">चार्जर लगाएँ</string>
+    <string name="island_connected">कनेक्टेड</string>
+    <string name="island_mark_read">पढ़ा हुआ मार्क करें</string>
+    <string name="island_reply">जवाब दें</string>
+    <string name="island_unknown">अज्ञात</string>
+    <string name="island_clock_timer">घड़ी का टाइमर</string>
+    <string name="island_timer">टाइमर</string>
+    <string name="island_incoming_call">आने वाली कॉल</string>
+    <string name="island_reply_hint">जवाब दें…</string>
+    <string name="island_new_notification">नया नोटिफ़िकेशन</string>
+    <string name="island_bluetooth_device">ब्लूटूथ डिवाइस</string>
+    <string name="island_wired_headphones">वायर्ड हेडफ़ोन</string>
+    <string name="island_call">कॉल</string>
+    <string name="island_sent">भेजा गया</string>
+    <string name="island_reply_sent">जवाब भेजा गया</string>
+    <string name="island_time_up">समय पूरा हुआ!</string>
+    <string name="island_seconds_complete">%1$d सेकंड पूरे</string>
+    <string name="island_timer_complete">टाइमर पूरा हुआ</string>
 </resources>

@@ -115,6 +115,17 @@ enum class SwipeAction(val key: String, @StringRes val label: Int) {
     }
 }
 
+/** What remains visible when another app hides the status bar. */
+enum class FullscreenBehavior(val key: String, @StringRes val label: Int) {
+    ShowAll("all", R.string.fullscreen_show_all),
+    HideIdle("idle", R.string.fullscreen_hide_idle),
+    AlertsOnly("alerts", R.string.fullscreen_alerts_only);
+
+    companion object {
+        fun from(key: String?) = entries.firstOrNull { it.key == key } ?: ShowAll
+    }
+}
+
 object IslandSettings {
     private var prefs: SharedPreferences? = null
 
@@ -123,6 +134,7 @@ object IslandSettings {
     val heightScale = MutableStateFlow(1f)  // 0.7x .. 1.6x
     val offsetX = MutableStateFlow(0f)      // dp, left (-) / right (+) of center
     val offsetY = MutableStateFlow(10f)     // dp, down from the top of the screen
+    val autoAlignCamera = MutableStateFlow(false)
 
     // Every quick pop-up banner type has its own size / text / roundness / show time
     val kindStyles = MutableStateFlow<Map<String, KindStyle>>(emptyMap())
@@ -144,8 +156,10 @@ object IslandSettings {
     val islandAppAccent = MutableStateFlow(false)                // island glow uses the app accent instead of album art
     val autoCollapseSec = MutableStateFlow(6)                    // expanded card collapses by itself (0 = never)
     val idlePill = MutableStateFlow(true)                        // small pill stays on screen when idle (tap = time / date / battery)
+    val fullscreenBehavior = MutableStateFlow(FullscreenBehavior.ShowAll)
     val swipeSkip = MutableStateFlow(true)                       // swipe left/right on the island to skip tracks
     val stickyNotif = MutableStateFlow(false)                    // notifications stay on the island until tapped / swiped away
+    val suppressSystemHeadsUp = MutableStateFlow(false)          // island banner replaces the normal system pop-up
     val swipeUp = MutableStateFlow(SwipeAction.Dismiss)
     val swipeDown = MutableStateFlow(SwipeAction.None)
     val swipeLeft = MutableStateFlow(SwipeAction.NextTrack)
@@ -170,6 +184,7 @@ object IslandSettings {
         heightScale.value = p.getFloat("h", 1f)
         offsetX.value = p.getFloat("x", 0f)
         offsetY.value = p.getFloat("y", 10f)
+        autoAlignCamera.value = p.getBoolean("autoAlignCamera", false)
         kindStyles.value = IslandKind.entries.associate { t ->
             val k = "bn_${t.key}"
             t.key to KindStyle(
@@ -201,8 +216,10 @@ object IslandSettings {
         bgColor.value = p.getInt("bgColor", 0xFF14121C.toInt())
         islandAppAccent.value = p.getBoolean("islandAppAccent", false)
         autoCollapseSec.value = p.getInt("autoCollapse", 6)
+        fullscreenBehavior.value = FullscreenBehavior.from(p.getString("fullscreenBehavior", null))
         swipeSkip.value = p.getBoolean("swipeSkip", true)
         stickyNotif.value = p.getBoolean("stickyNotif", false)
+        suppressSystemHeadsUp.value = p.getBoolean("suppressSystemHeadsUp", false)
         swipeUp.value = SwipeAction.from(p.getString("swipeUp", null), SwipeAction.Dismiss)
         swipeDown.value = SwipeAction.from(p.getString("swipeDown", null), SwipeAction.None)
         swipeLeft.value = SwipeAction.from(p.getString("swipeLeft", null), SwipeAction.NextTrack)
@@ -224,6 +241,7 @@ object IslandSettings {
             ?.putFloat("h", heightScale.value)
             ?.putFloat("x", offsetX.value)
             ?.putFloat("y", offsetY.value)
+            ?.putBoolean("autoAlignCamera", autoAlignCamera.value)
             ?.putFloat("corner", corner.value)
             ?.putFloat("speed", animSpeed.value)
             ?.putBoolean("glow", glow.value)
@@ -238,8 +256,10 @@ object IslandSettings {
             ?.putInt("bgColor", bgColor.value)
             ?.putBoolean("islandAppAccent", islandAppAccent.value)
             ?.putInt("autoCollapse", autoCollapseSec.value)
+            ?.putString("fullscreenBehavior", fullscreenBehavior.value.key)
             ?.putBoolean("swipeSkip", swipeSkip.value)
             ?.putBoolean("stickyNotif", stickyNotif.value)
+            ?.putBoolean("suppressSystemHeadsUp", suppressSystemHeadsUp.value)
             ?.putString("swipeUp", swipeUp.value.key)
             ?.putString("swipeDown", swipeDown.value.key)
             ?.putString("swipeLeft", swipeLeft.value.key)
@@ -310,6 +330,7 @@ object IslandSettings {
         heightScale.value = 1f
         offsetX.value = 0f
         offsetY.value = 10f
+        autoAlignCamera.value = false
         save()
     }
 
@@ -321,6 +342,8 @@ object IslandSettings {
         autoCollapseSec.value = 6
         swipeSkip.value = true
         stickyNotif.value = false
+        suppressSystemHeadsUp.value = false
+        fullscreenBehavior.value = FullscreenBehavior.ShowAll
         swipeUp.value = SwipeAction.Dismiss
         swipeDown.value = SwipeAction.None
         swipeLeft.value = SwipeAction.NextTrack

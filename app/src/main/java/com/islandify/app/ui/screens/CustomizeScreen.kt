@@ -39,11 +39,13 @@ import androidx.compose.ui.graphics.vector.ImageVector
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CustomizeScreen() {
+    val ctx = LocalContext.current
     val scale by IslandSettings.scale.collectAsState()
     val w by IslandSettings.widthScale.collectAsState()
     val h by IslandSettings.heightScale.collectAsState()
     val x by IslandSettings.offsetX.collectAsState()
     val y by IslandSettings.offsetY.collectAsState()
+    val autoAlignCamera by IslandSettings.autoAlignCamera.collectAsState()
     val corner by IslandSettings.corner.collectAsState()
     val speed by IslandSettings.animSpeed.collectAsState()
     val glow by IslandSettings.glow.collectAsState()
@@ -60,12 +62,15 @@ fun CustomizeScreen() {
     val swLeft by IslandSettings.swipeLeft.collectAsState()
     val swRight by IslandSettings.swipeRight.collectAsState()
     val stickyNotif by IslandSettings.stickyNotif.collectAsState()
+    val suppressSystemHeadsUp by IslandSettings.suppressSystemHeadsUp.collectAsState()
     val idlePill by IslandSettings.idlePill.collectAsState()
+    val fullscreenBehavior by IslandSettings.fullscreenBehavior.collectAsState()
     val dynamicOk = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
 
     fun nudge(dx: Float, dy: Float) {
         IslandSettings.offsetX.value = (IslandSettings.offsetX.value + dx).coerceIn(-180f, 180f)
-        IslandSettings.offsetY.value = (IslandSettings.offsetY.value + dy).coerceIn(0f, 300f)
+        val yRange = if (IslandSettings.autoAlignCamera.value) -60f..60f else 0f..300f
+        IslandSettings.offsetY.value = (IslandSettings.offsetY.value + dy).coerceIn(yRange)
         IslandSettings.save()
     }
 
@@ -125,13 +130,26 @@ fun CustomizeScreen() {
 
         /* ---------- Position + calibration ---------- */
         SectionCard(title = stringResource(R.string.cust_position), icon = Icons.Rounded.OpenWith) {
+            ToggleRow(
+                icon = Icons.Rounded.CameraFront,
+                title = stringResource(R.string.cust_auto_camera),
+                subtitle = stringResource(R.string.cust_auto_camera_sub),
+                checked = autoAlignCamera,
+                onChange = { enabled ->
+                    IslandSettings.autoAlignCamera.value = enabled
+                    IslandSettings.offsetX.value = 0f
+                    IslandSettings.offsetY.value = if (enabled) 0f else 10f
+                    IslandSettings.save()
+                }
+            )
             CenteredSettingSlider(
                 stringResource(R.string.cust_left_right), Icons.Rounded.SwapHoriz, "${x.toInt()} dp",
                 x, -180f..180f, 0f, { IslandSettings.offsetX.value = it }, { IslandSettings.save() }
             )
             CenteredSettingSlider(
                 stringResource(R.string.cust_up_down), Icons.Rounded.SwapVert, "${y.toInt()} dp",
-                y, 0f..300f, 10f, { IslandSettings.offsetY.value = it }, { IslandSettings.save() }
+                y, if (autoAlignCamera) -60f..60f else 0f..300f, if (autoAlignCamera) 0f else 10f,
+                { IslandSettings.offsetY.value = it }, { IslandSettings.save() }
             )
             Text(
                 stringResource(R.string.cust_nudge_hint),
@@ -167,10 +185,63 @@ fun CustomizeScreen() {
                 subtitle = stringResource(R.string.cust_idle_pill_sub),
                 checked = idlePill, onChange = { IslandSettings.idlePill.value = it; IslandSettings.save() }
             )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Rounded.Fullscreen, null, tint = MaterialTheme.colorScheme.primary)
+                Spacer(Modifier.width(12.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        stringResource(R.string.cust_fullscreen),
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = androidx.compose.ui.text.font.FontWeight.Medium
+                    )
+                    Text(
+                        stringResource(R.string.cust_fullscreen_sub),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+            SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
+                FullscreenBehavior.entries.forEachIndexed { index, behavior ->
+                    SegmentedButton(
+                        selected = fullscreenBehavior == behavior,
+                        onClick = {
+                            IslandSettings.fullscreenBehavior.value = behavior
+                            IslandSettings.save()
+                        },
+                        shape = SegmentedButtonDefaults.itemShape(
+                            index = index,
+                            count = FullscreenBehavior.entries.size
+                        ),
+                        icon = {},
+                        label = {
+                            Text(
+                                stringResource(behavior.label),
+                                maxLines = 1,
+                                style = MaterialTheme.typography.labelSmall
+                            )
+                        }
+                    )
+                }
+            }
             ToggleRow(
                 icon = Icons.Rounded.PushPin, title = stringResource(R.string.cust_sticky_notif),
                 subtitle = stringResource(R.string.cust_sticky_notif_sub),
                 checked = stickyNotif, onChange = { IslandSettings.stickyNotif.value = it; IslandSettings.save() }
+            )
+            ToggleRow(
+                icon = Icons.Rounded.NotificationsOff,
+                title = stringResource(R.string.cust_suppress_heads_up),
+                subtitle = stringResource(R.string.cust_suppress_heads_up_sub),
+                checked = suppressSystemHeadsUp,
+                onChange = { enabled ->
+                    IslandSettings.suppressSystemHeadsUp.value = enabled
+                    IslandSettings.save()
+                    HeadsUpController.sync(ctx)
+                    if (enabled && !Perms.notificationPolicy(ctx)) {
+                        Perms.openNotificationPolicySettings(ctx)
+                    }
+                }
             )
             ToggleRow(
                 icon = Icons.Rounded.Palette, title = stringResource(R.string.cust_app_accent),
@@ -296,12 +367,12 @@ fun CustomizeScreen() {
 
         /* ---------- Language ---------- */
         SectionCard(title = stringResource(R.string.lang_title), icon = Icons.Rounded.Language) {
-            val ctx = LocalContext.current
             var lang by remember { mutableStateOf(AppLanguage.saved(ctx)) }
             val options = listOf(
                 AppLanguage.SYSTEM to stringResource(R.string.theme_system),
                 AppLanguage.ENGLISH to "English",
                 AppLanguage.HINDI to "हिन्दी",
+                AppLanguage.PORTUGUESE_BRAZIL to "Português",
             )
             SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
                 options.forEachIndexed { i, (code, name) ->

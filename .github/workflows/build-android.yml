@@ -1,0 +1,185 @@
+name: Build Android APK
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - "v*"
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-build-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build release APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    outputs:
+      version_name: ${{ steps.package.outputs.version_name }}
+      artifact_name: ${{ steps.package.outputs.artifact_name }}
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v7
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v6
+
+      # Same-repository pull requests receive the signing secrets too, making every artifact
+      # updatable over the previous one. Fork PRs receive no secrets and safely use the fallback.
+      - name: Configure release signing
+        id: signing
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [[ -z "${KEYSTORE_BASE64}" && -z "${KEYSTORE_PASSWORD}" && -z "${KEY_ALIAS}" && -z "${KEY_PASSWORD}" ]]; then
+            echo "Signing secrets are not configured; the APK will use the debug signing key."
+            echo "signed=false" >> "${GITHUB_OUTPUT}"
+            exit 0
+          fi
+
+          if [[ -z "${KEYSTORE_BASE64}" || -z "${KEYSTORE_PASSWORD}" || -z "${KEY_ALIAS}" || -z "${KEY_PASSWORD}" ]]; then
+            echo "All four Android signing secrets must be configured together." >&2
+            exit 1
+          fi
+
+          KEYSTORE_PATH="${RUNNER_TEMP}/islandify-release.jks"
+          printf '%s' "${KEYSTORE_BASE64}" | base64 --decode > "${KEYSTORE_PATH}"
+          chmod 600 "${KEYSTORE_PATH}"
+
+          {
+            printf 'storeFile=%s\n' "${KEYSTORE_PATH}"
+            printf 'storePassword=%s\n' "${KEYSTORE_PASSWORD}"
+            printf 'keyAlias=%s\n' "${KEY_ALIAS}"
+            printf 'keyPassword=%s\n' "${KEY_PASSWORD}"
+          } > keystore.properties
+          chmod 600 keystore.properties
+          echo "signed=true" >> "${GITHUB_OUTPUT}"
+
+      - name: Build optimized release APK
+        shell: bash
+        run: |
+          set -o pipefail
+          ./gradlew --no-daemon --stacktrace clean assembleRelease 2>&1 | tee gradle-build.log
+
+      - name: Report Gradle errors
+        if: failure()
+        shell: bash
+        run: |
+          ERRORS="$(grep -E '^e: |^.*error: |^FAILURE:|^\* What went wrong:|^> ' gradle-build.log | tail -n 40 || true)"
+          if [[ -z "${ERRORS}" ]]; then
+            ERRORS="$(tail -n 80 gradle-build.log)"
+          fi
+          ERRORS="${ERRORS//'%'/'%25'}"
+          ERRORS="${ERRORS//$'\r'/'%0D'}"
+          ERRORS="${ERRORS//$'\n'/'%0A'}"
+          echo "::error title=Gradle build failed::${ERRORS}"
+
+      - name: Verify permanent release signature
+        if: steps.signing.outputs.signed == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          APKSIGNER="$(find "${ANDROID_HOME}/build-tools" -type f -name apksigner | sort -V | tail -n 1)"
+          if [[ -z "${APKSIGNER}" ]]; then
+            echo "Could not find apksigner." >&2
+            exit 1
+          fi
+          set +e
+          SIGNATURE_INFO="$("${APKSIGNER}" verify --verbose --print-certs app/build/outputs/apk/release/app-release.apk 2>&1)"
+          VERIFY_STATUS=$?
+          set -e
+          printf '%s\n' "${SIGNATURE_INFO}"
+          if [[ ${VERIFY_STATUS} -ne 0 ]]; then
+            echo "::error title=APK signature verification failed::${SIGNATURE_INFO//$'\n'/'%0A'}"
+            exit "${VERIFY_STATUS}"
+          fi
+          DIGEST_LINE="$(printf '%s\n' "${SIGNATURE_INFO}" | grep -im 1 'certificate SHA-256 digest' || true)"
+          ACTUAL_SHA256="$(printf '%s' "${DIGEST_LINE}" | grep -oE '[0-9a-fA-F]{64}' | tail -n 1 | tr '[:upper:]' '[:lower:]' || true)"
+          EXPECTED_SHA256="6c76f8864c09ac430cbf89d5a07e10c4926a6f582bf96dcfc3a3f129e21d75f5"
+          if [[ "${ACTUAL_SHA256}" != "${EXPECTED_SHA256}" ]]; then
+            echo "::error title=Unexpected APK signing certificate::Expected ${EXPECTED_SHA256}; got ${ACTUAL_SHA256:-missing}"
+            exit 1
+          fi
+
+      - name: Package APK and checksum
+        id: package
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION_NAME="$(sed -nE 's/^[[:space:]]*versionName[[:space:]]*=[[:space:]]*"([^"]+)".*/\1/p' app/build.gradle.kts | head -n 1)"
+          if [[ -z "${VERSION_NAME}" ]]; then
+            echo "Could not read versionName from app/build.gradle.kts" >&2
+            exit 1
+          fi
+
+          ARTIFACT_NAME="Islandify-${VERSION_NAME}-release"
+          mkdir -p release
+          cp app/build/outputs/apk/release/app-release.apk "release/${ARTIFACT_NAME}.apk"
+          (
+            cd release
+            sha256sum "${ARTIFACT_NAME}.apk" > "${ARTIFACT_NAME}.apk.sha256"
+          )
+
+          echo "version_name=${VERSION_NAME}" >> "${GITHUB_OUTPUT}"
+          echo "artifact_name=${ARTIFACT_NAME}" >> "${GITHUB_OUTPUT}"
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ steps.package.outputs.artifact_name }}
+          path: release/
+          if-no-files-found: error
+          retention-days: 30
+
+  publish-release:
+    name: Publish tagged release
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download built APK
+        uses: actions/download-artifact@v8
+        with:
+          name: ${{ needs.build.outputs.artifact_name }}
+          path: release
+
+      - name: Create or update GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if gh release view "${GITHUB_REF_NAME}" >/dev/null 2>&1; then
+            gh release upload "${GITHUB_REF_NAME}" release/* --clobber
+          else
+            gh release create "${GITHUB_REF_NAME}" release/* \
+              --verify-tag \
+              --generate-notes \
+              --title "Islandify ${GITHUB_REF_NAME}"
+          fi
