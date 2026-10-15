@@ -368,7 +368,7 @@ class IslandListener : NotificationListenerService() {
         val hide = locked && n.visibility != Notification.VISIBILITY_PUBLIC
 
         // Inline reply (RemoteInput) and "Mark as read" actions, e.g. Messages / WhatsApp / Telegram
-        val acts: Array<Notification.Action> =
+        val acts: Array<out Notification.Action> =
             if (hide) emptyArray() else n.actions.orEmpty()
         val reply = acts.firstOrNull { a -> a.remoteInputs?.any { it.allowFreeFormInput } == true }
         val markRead = acts.firstOrNull { a ->
