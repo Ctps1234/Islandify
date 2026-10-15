@@ -78,7 +78,23 @@ jobs:
           chmod 600 keystore.properties
 
       - name: Build optimized release APK
-        run: ./gradlew --no-daemon --stacktrace clean assembleRelease
+        shell: bash
+        run: |
+          set -o pipefail
+          ./gradlew --no-daemon --stacktrace clean assembleRelease 2>&1 | tee gradle-build.log
+
+      - name: Report Gradle errors
+        if: failure()
+        shell: bash
+        run: |
+          ERRORS="$(grep -E '^e: |^.*error: |^FAILURE:|^\* What went wrong:|^> ' gradle-build.log | tail -n 40 || true)"
+          if [[ -z "${ERRORS}" ]]; then
+            ERRORS="$(tail -n 80 gradle-build.log)"
+          fi
+          ERRORS="${ERRORS//'%'/'%25'}"
+          ERRORS="${ERRORS//$'\r'/'%0D'}"
+          ERRORS="${ERRORS//$'\n'/'%0A'}"
+          echo "::error title=Gradle build failed::${ERRORS}"
 
       - name: Package APK and checksum
         id: package
